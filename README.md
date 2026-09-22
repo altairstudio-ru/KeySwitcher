@@ -4,6 +4,8 @@
 
 Работает автономно: программа не хранит историю и ничего не отправляет наружу.
 
+Текущая версия: **1.2.0** (номер в окне «О программе», в свойствах exe и в имени установщика синхронизированы).
+
 ---
 
 ## Возможности
@@ -25,9 +27,18 @@
 
 ## Установка
 
-1. Скопируйте `layout-switcher.exe` и `config.ini` в одну папку (например, `%LOCALAPPDATA%\LayoutSwitcher`).
-2. Запустите `layout-switcher.exe` — в трее появится иконка.
-3. Выделите текст и нажмите основную горячую клавишу.
+Рекомендуется установщик: скачайте `AltaiR-Key-Switcher-<версия>-setup.exe`
+на странице [Releases](https://github.com/altairstudio-ru/KeySwitcher/releases)
+и запустите — права администратора не нужны (установка в текущий профиль).
+
+Мастер установки предлагает:
+- запуск программы при входе в Windows;
+- пункт меню Проводника «Исправить раскладку в имени» (ПКМ по файлу/папке);
+- ярлык на рабочем столе.
+
+Программа ставится в `%LOCALAPPDATA%\LayoutSwitcher`. Для удаления — «Установка и удаление программ».
+
+Ручная установка (portable): скопируйте `layout-switcher.exe` и `config.ini` в одну папку и запустите — в трее появится иконка. Пункт ПКМ в этом случае нужно зарегистрировать самостоятельно (`reg edit`, раздел `HKCU\Software\Classes`).
 
 Иконка в трее — контекстное меню:
 
@@ -57,7 +68,8 @@
 
 ### Переименование файлов и папок
 
-Через ПКМ по файлу/папке в «Проводнике» (расширение имени остаётся нетронутым). Команда под капотом:
+Пункт «Исправить раскладку в имени» появляется в контекстном меню Проводника
+(устанавливается мастером установки, задача «Пункт меню Проводника»). Команда под капотом:
 
 ```
 layout-switcher.exe --convert-filename "путь\к\файлу"
@@ -125,21 +137,40 @@ SwitchLayout=0      ; 1 — вместе с текстом менять и яз�
 
 ---
 
-## Сборка из исходников
+## Сборка релиза из исходников
 
-Компиляция через [Ahk2Exe](https://github.com/AutoHotkey/Ahk2Exe) (входит в поставку AutoHotkey v2):
+Нужны: [AutoHotkey v2](https://www.autohotkey.com) (содержит компилятор Ahk2Exe), [Inno Setup 6](https://jrsoftware.org/isinfo.php) и [rcedit](https://github.com/electron/rcedit/releases). Версия приложения задаётся в трёх местах: `APP_VERSION` в `src\ui.ahk`, `MyAppVersion` в `build\installer.iss` и метаданные exe (шаг 2) — их нужно поднимать одновременно.
 
-```
-"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in layout-switcher.ahk /out layout-switcher.exe /icon icon.ico /base "...\AutoHotkey\v2\AutoHotkey64.exe"
-```
+1. Компиляция exe (скрипты `layout-map.ahk` и `src\ui.ahk` встраиваются, рядом с exe они не нужны):
 
-На этапе компиляции `layout-map.ahk` и `src\ui.ahk` встраиваются в exe — распространять их рядом с `layout-switcher.exe` не нужно (нужен только `config.ini`).
+   ```
+   "...\AutoHotkey\Compiler\Ahk2Exe.exe" /in layout-switcher.ahk /out layout-switcher.exe /icon icon.ico /base "...\AutoHotkey\v2\AutoHotkey64.exe"
+   ```
+
+   > В Git Bash аргументы вида `/in` ломаются MSYS-преобразованием путей — запускайте из `cmd`/PowerShell или с `MSYS2_ARG_CONV_EXCL='*'`.
+
+2. Метаданные файла (свойства Windows: версия, название, издатель):
+
+   ```
+   rcedit-x64.exe layout-switcher.exe --set-file-version 1.2.0 --set-product-version 1.2.0.0 ^
+     --set-version-string ProductName "AltaiR Key Switcher" --set-version-string CompanyName "Altair Studio" ^
+     --set-version-string FileDescription "AltaiR Key Switcher - correction of RU/EN keyboard layout"
+   ```
+
+3. Установщик (результат в `dist\`):
+
+   ```
+   "...\Inno Setup 6\ISCC.exe" build\installer.iss
+   ```
+
+4. Самопроверка карты раскладок: `layout-switcher.exe --selftest` (ожидаются 94 пары и 0 ошибок).
 
 ### Структура репозитория
 
 ```
 K:\KeySwitcher\
 ├── layout-switcher.ahk   — главный скрипт
+├── layout-map.ahk        — карта раскладок RU↔EN + SelfTest (встраивается в exe)
 ├── layout-switcher.exe   — скомпилированная программа
 ├── config.ini            — настройки
 ├── icon.ico              — иконка exe (набор размеров 16–256 px)
@@ -148,8 +179,11 @@ K:\KeySwitcher\
 ├── icons\                — PNG-набор той же иконки (16–256 px), для справки/UI
 ├── src\
 │   └── ui.ahk            — GUI-модуль: окна «О программе» и «Настройки»
-└── build\
-    └── gen_icon.py       — прежний генератор иконки (исторический)
+├── build\
+│   ├── installer.iss     — скрипт установщика Inno Setup
+│   ├── run_selftest.ahk  — головная самопроверка карты (для сборки)
+│   └── gen_icon.py       — прежний генератор иконки (исторический)
+└── dist\                 — готовые установщики (не в git; как и tools\)
 ```
 
 ---
