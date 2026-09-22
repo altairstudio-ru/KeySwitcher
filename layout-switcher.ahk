@@ -204,6 +204,20 @@ RenameEntry(path) {
         return
     }
 
+    ; Недопустимые в именах Windows символы (< > : " / \ | ? * и упр.)
+    ; появляются при конвертации (@ -> ", ^ -> :, & -> ? и т.п.)
+    if RegExMatch(newName, "[<>:`"/\\|?*\x00-\x1F]") {
+        MsgBox(
+            "В исправленном имени есть недопустимые символы:`n"
+            newName
+            "`n`nWindows не разрешает в именах файлов: < > : "
+            "`" / \ | ? *"
+            "`n`nПереименуйте такой файл вручную.",
+            "AltaiR Key Switcher"
+        )
+        return
+    }
+
     newPath := dir "\" newName
     if FileExist(newPath) || DirExist(newPath) {
         MsgBox("Объект с таким именем уже существует:`n" newPath, "AltaiR Key Switcher")
