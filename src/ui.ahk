@@ -22,6 +22,7 @@ CLR_ACCENT  := "2E5BE0"   ; акцентный синий
 CLR_TEXT    := "1C2438"   ; основной текст
 CLR_MUTED   := "5A6B8C"   ; приглушённый текст
 CLR_DIVIDER := "B9C6E4"   ; тонкая линия-разделитель
+CLR_BAND    := "D7E3FC"   ; текст на цветном баннере (шапка About)
 
 FONT_FAMILY := "Segoe UI"
 
@@ -55,74 +56,71 @@ UI_ShowAbout() {
     g.BackColor := CLR_BG
     g.SetFont("s10", FONT_FAMILY)
 
-    ; ---------- Шапка: логотип + название ----------
+    ; ---------- Шапка-баннер ----------
+    g.AddProgress("x0 y0 w480 h112 Background" CLR_BG " c" CLR_ACCENT, 100)
+
     imgPath := A_ScriptDir "\icon.png"
     logo := ""
     if FileExist(imgPath) {
         try
-            logo := g.AddPicture("x24 y24 w96 h96", imgPath)
+            logo := g.AddPicture("x24 y24 w64 h64", imgPath)
     }
     if !logo {
         g.SetFont("s36", FONT_FAMILY)
-        logo := g.AddText("x24 y24 w96 h96 Center c" CLR_ACCENT, "п⇄p")
+        logo := g.AddText("x24 y20 w64 h64 Center cFFFFFF", "п⇄p")
         g.SetFont("s10", FONT_FAMILY)
     }
 
-    g.SetFont("s20 bold")
-    g.AddText("x140 y26 w310 h34 c" CLR_TEXT, APP_NAME)
+    g.SetFont("s18 bold", FONT_FAMILY)
+    g.AddText("x104 y30 w360 h28 cFFFFFF", APP_NAME)
 
     g.SetFont("s9", FONT_FAMILY)
-    g.AddText("x140 y62 w310 h18 c" CLR_MUTED, "Версия " APP_VERSION " · RU ↔ EN")
+    g.AddText("x104 y62 w360 h18 c" CLR_BAND, "Версия " APP_VERSION " · RU ↔ EN")
 
+    ; ---------- Описание ----------
     g.SetFont("s10", FONT_FAMILY)
-    g.AddText("x140 y84 w310 h36 c" CLR_TEXT, "Один клик — и текст, набранный не в той"
-        . " раскладке, снова читается в нужной.")
-
-    ; ---------- Разделитель ----------
-    g.AddProgress("x24 y136 w412 h2 c" CLR_DIVIDER " Background" CLR_BG, 100)
-
-    ; ---------- Карточка-описание ----------
-    g.SetFont("s10", FONT_FAMILY)
-    g.AddText("x24 y148 w412 h74 Background" CLR_CARD " Border c" CLR_TEXT,
+    g.AddText("x24 y124 w432 h66 Background" CLR_CARD " Border c" CLR_TEXT,
         "   Исправляет текст, набранный не в той раскладке (RU ↔ EN):"
         . "`n   выделите текст и нажмите горячую клавишу —"
         . "`n   выделение будет заменено исправленным текстом.")
 
     ; ---------- Горячие клавиши ----------
-    g.AddGroupBox("x24 y236 w412 h120 Section", "Горячие клавиши")
+    g.AddGroupBox("x24 y206 w432 h130 Section", "Горячие клавиши")
     g.SetFont("s10", FONT_FAMILY)
-    g.AddText("x40 ys+16 w220 h22 c" CLR_TEXT, "Конвертировать и вставить")
+    g.AddText("x40 ys+26 w190 h22 c" CLR_TEXT, "Исправить и вставить")
     g.SetFont("s10 bold", FONT_FAMILY)
-    g.AddText("x276 ys+16 w140 h22 Right c" CLR_ACCENT, UI_HotkeyToDisplay(cfg.hotkey))
+    g.AddText("x238 ys+18 w200 h30 Center Background" CLR_CARD " Border c" CLR_ACCENT,
+        UI_HotkeyToDisplay(cfg.hotkey))
     g.SetFont("s10", FONT_FAMILY)
-    g.AddText("x40 ys+44 w220 h22 c" CLR_TEXT, "Только скопировать")
+    g.AddText("x40 ys+68 w190 h22 c" CLR_TEXT, "Только скопировать")
     g.SetFont("s10 bold", FONT_FAMILY)
-    g.AddText("x276 ys+44 w140 h22 Right c" CLR_ACCENT, UI_HotkeyToDisplay(cfg.hotkeyCopy))
+    g.AddText("x238 ys+60 w200 h30 Center Background" CLR_CARD " Border c" CLR_ACCENT,
+        UI_HotkeyToDisplay(cfg.hotkeyCopy))
     g.SetFont("s8.5", FONT_FAMILY)
-    g.AddText("x40 ys+72 w370 h18 c" CLR_MUTED, "Формат: ^ — Ctrl,  + — Shift,  ! — Alt (как в config.ini)")
+    g.AddText("x40 ys+100 w410 h18 c" CLR_MUTED, "Формат: ^ — Ctrl,  + — Shift,  ! — Alt (как в config.ini)")
+    g.SetFont("s10", FONT_FAMILY)
 
     ; ---------- Файлы ----------
-    g.AddGroupBox("x24 y368 w412 h74 Section", "Файлы")
-    g.SetFont("s10", FONT_FAMILY)
-    g.AddText("x40 ys+16 w372 h20 c" CLR_TEXT, "Расположение конфигурации:")
+    g.AddGroupBox("x24 y352 w432 h76 Section", "Файлы")
+    g.AddText("x40 ys+18 w380 h20 c" CLR_TEXT, "Расположение конфигурации:")
     g.SetFont("s9", FONT_FAMILY)
-    g.AddText("x40 ys+38 w372 h22 c" CLR_MUTED, cfg.iniPath)
+    g.AddText("x40 ys+40 w380 h22 c" CLR_MUTED, cfg.iniPath)
 
     ; ---------- Кнопки ----------
-    btnSettings := g.AddButton("x24 y458 w120 h30", "Настройки…")
+    btnSettings := g.AddButton("x24 y446 w130 h32", "Настройки…")
     btnSettings.OnEvent("Click", (*) => UI_CloseAboutOpenSettings(g))
-    btnClose := g.AddButton("x326 y458 w110 h30 Default", "Закрыть")
+    btnClose := g.AddButton("x338 y446 w118 h32 Default", "Закрыть")
     btnClose.OnEvent("Click", (*) => g.Destroy())
 
     ; ---------- Футер ----------
     g.SetFont("s8.5", FONT_FAMILY)
-    g.AddText("x24 y496 w412 h20 Center c" CLR_MUTED,
-        "AutoHotkey v" A_AhkVersion " · исправление раскладки RU ↔ EN")
+    g.AddText("x24 y488 w432 h18 Center c" CLR_MUTED,
+        "AltaiR Key Switcher v" APP_VERSION " · исправление раскладки RU ↔ EN")
     g.SetFont("s10", FONT_FAMILY)
 
     g.OnEvent("Close",  (*) => g.Destroy())
     g.OnEvent("Escape", (*) => g.Destroy())
-    g.Show("w460 h524")
+    g.Show("w480 h520")
 
     UI_CloseAboutOpenSettings(aboutGui) {
         aboutGui.Destroy()
@@ -208,6 +206,9 @@ UI_ShowSettings() {
 ; ============================================================
 UI_SaveSettings(g, edHotkey, edHotkeyCopy, chkAuto, chkSound, chkRestore, chkLayout, edMs, edCopy) {
     global cfg
+    ; RunConvert / ShowToast — глобальные функции главного скрипта;
+    ; явное объявление global убирает предупреждение #Warn LocalSameAsGlobal.
+    global RunConvert, ShowToast
 
     hk      := Trim(edHotkey.Text)
     hkCopy  := Trim(edHotkeyCopy.Text)

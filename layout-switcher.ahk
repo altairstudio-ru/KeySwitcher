@@ -12,6 +12,11 @@ Persistent
 
 A_IconTip := "AltaiR Key Switcher"
 
+; Трей-иконка: отдельный файл рядом со скриптом/exe (в exe встроена своя)
+if FileExist(A_ScriptDir "\altair_tray.ico")
+    try
+        TraySetIcon(A_ScriptDir "\altair_tray.ico")
+
 ; ------------------------- Конфигурация -------------------------
 cfg := { }
 cfg.iniPath := A_ScriptDir "\config.ini"
