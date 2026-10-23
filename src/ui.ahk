@@ -34,16 +34,19 @@ UI_HotkeyToDisplay(hk) {
     out := ""
     for ch in StrSplit(hk) {
         if ch = '^'
-            out .= "Ctrl+"
+            out .= "Ctrl + "
         else if ch = '+'
-            out .= "Shift+"
+            out .= "Shift + "
         else if ch = '!'
-            out .= "Alt+"
+            out .= "Alt + "
         else if ch = '#'
-            out .= "Win+"
+            out .= "Win + "
         else
             out .= ch
     }
+    ; убрать лишний " + " в конце, если есть
+    if SubStr(out, -2) = " + "
+        out := SubStr(out, 1, StrLen(out) - 3)
     return out
 }
 
@@ -97,7 +100,7 @@ UI_ShowAbout() {
     g.AddText("x238 ys+60 w200 h30 Center Background" CLR_CARD " Border c" CLR_ACCENT,
         UI_HotkeyToDisplay(cfg.hotkeyCopy))
     g.SetFont("s8.5", FONT_FAMILY)
-    g.AddText("x40 ys+100 w410 h18 c" CLR_MUTED, "Формат: ^ — Ctrl,  + — Shift,  ! — Alt (как в config.ini)")
+    g.AddText("x40 ys+100 w410 h18 c" CLR_MUTED, "Формат: ^ = Ctrl, + = Shift, ! = Alt, # = Win (как в config.ini)")
     g.SetFont("s10", FONT_FAMILY)
 
     ; ---------- Файлы ----------
