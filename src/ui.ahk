@@ -161,8 +161,8 @@ UI_ShowSettings() {
     edHotkeyCopy := g.AddEdit("x240 ys+48 w170", cur_hkCopy)
     g.SetFont("s8.5", FONT_FAMILY)
     g.AddText("x40 ys+80 w372 h30 c" CLR_MUTED,
-        "Формат AHK: ^ — Ctrl, + — Shift, ! — Alt, # — Win.`n"
-        . "Пример: ^+X = Ctrl+Shift+X.")
+        "Формат AHK: ^ = Ctrl, + = Shift, ! = Alt, # = Win.`n"
+        . "Пример: ^+X = Ctrl + Shift + X.")
     g.SetFont("s10", FONT_FAMILY)
 
     ; ---------- Основные параметры ----------
