@@ -560,8 +560,7 @@ class SystemTheme {
     
     static Detect() {
         try {
-            reg := ComObjCreate("WScript.Shell")
-            val := reg.RegRead("HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme")
+            val := RegRead("HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1)
             SystemTheme.IsDark := (val = 0)
         } catch {
             SystemTheme.IsDark := false
@@ -575,13 +574,13 @@ class SystemTheme {
         if SystemTheme.Callback
             return
 
-        SystemTheme.Callback := SetTimer(SystemTheme.Poll, 2000)
+        SystemTheme.Callback := SystemTheme.Poll
+        SetTimer(SystemTheme.Callback, 2000)
     }
 
     static Poll() {
         try {
-            reg := ComObjCreate("WScript.Shell")
-            val := reg.RegRead("HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme")
+            val := RegRead("HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1)
             newDark := (val = 0)
             if newDark != SystemTheme.IsDark {
                 SystemTheme.IsDark := newDark
@@ -591,7 +590,7 @@ class SystemTheme {
         }
     }
     
-    static OnThemeChange := Func("SystemTheme_DefaultHandler")
+    static OnThemeChange := SystemTheme_DefaultHandler
     
     static StopListening() {
         if SystemTheme.Callback
