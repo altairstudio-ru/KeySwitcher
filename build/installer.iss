@@ -5,8 +5,8 @@
 ; ============================================================
 
 #define MyAppName      "AltaiR Key Switcher"
-#define MyAppVersion   "1.2.0"
-#define MyAppPublisher "Altair Studio"
+#define MyAppVersion   "2.0.0"
+#define MyAppPublisher "AltaiR Studio"
 #define MyAppURL       "https://github.com/altairstudio-ru/KeySwitcher"
 #define MyExeName      "layout-switcher.exe"
 
@@ -31,6 +31,9 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+CloseApplications=yes
+RestartApplications=no
+CloseApplicationsFilter={#MyExeName}
 
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -48,13 +51,6 @@ Source: "..\config.ini"; DestDir: "{app}"; Flags: onlyifdoesntexist
 Source: "..\icon.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\altair_tray.ico"; DestDir: "{app}"; Flags: ignoreversion
 
-[InstallDelete]
-; при обновлении убираем старую «исходниковую» установку
-Type: files; Name: "{app}\AutoHotkey64.exe"
-Type: files; Name: "{app}\layout-switcher.ahk"
-Type: files; Name: "{app}\layout-map.ahk"
-Type: filesandordirs; Name: "{app}\src"
-
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyExeName}"; Tasks: desktopicon
@@ -71,13 +67,3 @@ Root: HKCU; Subkey: "Software\Classes\Directory\shell\AltaiRKeySwitcher\command"
 
 [Run]
 Filename: "{app}\{#MyExeName}"; Description: "Запустить {#MyAppName}"; Flags: nowait postinstall skipifsilent
-
-[Code]
-// Перед установкой завершить запущенный экземпляр, иначе exe не заменится.
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ResultCode: Integer;
-begin
-  if CurStep = ssInstall then
-    Exec('taskkill.exe', '/F /IM {#MyExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-end;

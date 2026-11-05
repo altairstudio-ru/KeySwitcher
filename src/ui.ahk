@@ -1,290 +1,333 @@
-﻿; ============================================================
-;  ui.ahk  —  GUI-модуль «AltaiR Key Switcher»
-;  Окно «О программе» и окно «Настройки» (config.ini).
-;
-;  Подключается основным скриптом:  #Include "src\ui.ahk"
-;  Экспортируемые функции:
-;    UI_ShowAbout()     — окно «О программе»
-;    UI_ShowSettings()  — окно «Настройки»
-;
-;  Модуль расширяет интерфейс, но не трогает логику
-;  RunConvert / ConvertClipboardStandalone / RenameEntry.
-; ============================================================
+#Requires AutoHotkey v2.0
+#Include "ui\tokens.ahk"
+#Include "ui\core.ahk"
+#Include "ui\components.ahk"
 
-APP_NAME    := "AltaiR Key Switcher"
-APP_VERSION := "1.2.1"
+APP_NAME := "AltaiR Key Switcher"
+APP_VERSION := "2.0.0"
 
-; ---------------- Палитра и шрифты ----------------
-CLR_BG      := "F5F7FB"   ; фон окна
-CLR_CARD    := "FFFFFF"   ; карточка
-CLR_BORDER  := "D8DFEA"   ; рамка карточки
-CLR_ACCENT  := "2E5BE0"   ; акцентный синий
-CLR_TEXT    := "1C2438"   ; основной текст
-CLR_MUTED   := "5A6B8C"   ; приглушённый текст
-CLR_DIVIDER := "B9C6E4"   ; тонкая линия-разделитель
-CLR_BAND    := "D7E3FC"   ; текст на цветном баннере (шапка About)
-
-FONT_FAMILY := "Segoe UI"
-
-; ============================================================
-;  UI_HotkeyToDisplay(hk)
-;  Приводит формат AHK (^+X) к читаемому виду (Ctrl+Shift+X).
-; ============================================================
 UI_HotkeyToDisplay(hk) {
     out := ""
-    for ch in StrSplit(hk) {
-        if ch = '^'
-            out .= "Ctrl + "
-        else if ch = '+'
-            out .= "Shift + "
-        else if ch = '!'
-            out .= "Alt + "
-        else if ch = '#'
-            out .= "Win + "
-        else
-            out .= ch
+    while RegExMatch(hk, "^[\^+!#]") {
+        modifier := SubStr(hk, 1, 1)
+        out .= Map("^", "Ctrl", "+", "Shift", "!", "Alt", "#", "Win")[modifier] " + "
+        hk := SubStr(hk, 2)
     }
-    ; убрать лишний " + " в конце, если есть
-    if SubStr(out, -2) = " + "
-        out := SubStr(out, 1, StrLen(out) - 3)
-    return out
+    return out StrUpper(hk)
 }
 
-; ============================================================
-;  UI_ShowAbout() — окно «О программе»
-; ============================================================
 UI_ShowAbout() {
     global cfg
-    g := Gui("+AlwaysOnTop +OwnDialogs", "О программе — " APP_NAME)
-    g.BackColor := CLR_BG
-    g.SetFont("s10", FONT_FAMILY)
-
-    ; ---------- Шапка-баннер ----------
-    g.AddProgress("x0 y0 w480 h112 Background" CLR_BG " c" CLR_ACCENT, 100)
-
+    DesignTokens.DetectSystemTheme()
+    win := GlassWindow("О программе — " APP_NAME)
+    margin := DesignTokens.Space(6)
+    contentW := 552
+    fg := DesignTokens.GetTextColor("fg-primary", DesignTokens.IsDarkMode)
+    muted := DesignTokens.GetTextColor("fg-secondary", DesignTokens.IsDarkMode)
+    accent := DesignTokens.GetTextColor("accent", DesignTokens.IsDarkMode)
+    logoSize := DesignTokens.Sizing["logo-size"]
     imgPath := A_ScriptDir "\icon.png"
-    logo := ""
-    if FileExist(imgPath) {
-        try
-            logo := g.AddPicture("x24 y24 w64 h64", imgPath)
-    }
-    if !logo {
-        g.SetFont("s36", FONT_FAMILY)
-        logo := g.AddText("x24 y20 w64 h64 Center cFFFFFF", "п⇄p")
-        g.SetFont("s10", FONT_FAMILY)
-    }
+    if FileExist(imgPath)
+        win.AddPicture("x24 y28 w" logoSize " h" logoSize, imgPath)
+    win.SetFont("s22 bold", "Segoe UI")
+    win.AddText("x96 y26 w480 h36 c" fg, APP_NAME)
+    win.SetFont("s11 norm", "Segoe UI")
+    win.AddText("x96 y66 w460 h24 c" muted, "Версия " APP_VERSION " · RU ↔ EN")
 
-    g.SetFont("s18 bold", FONT_FAMILY)
-    g.AddText("x104 y30 w360 h28 cFFFFFF", APP_NAME)
-
-    g.SetFont("s9", FONT_FAMILY)
-    g.AddText("x104 y62 w360 h18 c" CLR_BAND, "Версия " APP_VERSION " · RU ↔ EN")
-
-    ; ---------- Описание ----------
-    g.SetFont("s10", FONT_FAMILY)
-    g.AddText("x24 y124 w432 h66 Background" CLR_CARD " Border c" CLR_TEXT,
-        "   Исправляет текст, набранный не в той раскладке (RU ↔ EN):"
-        . "`n   выделите текст и нажмите горячую клавишу —"
-        . "`n   выделение будет заменено исправленным текстом.")
-
-    ; ---------- Горячие клавиши ----------
-    g.AddGroupBox("x24 y206 w432 h130 Section", "Горячие клавиши")
-    g.SetFont("s10", FONT_FAMILY)
-    g.AddText("x40 ys+26 w190 h22 c" CLR_TEXT, "Исправить и вставить")
-    g.SetFont("s10 bold", FONT_FAMILY)
-    g.AddText("x238 ys+18 w200 h30 Center Background" CLR_CARD " Border c" CLR_ACCENT,
-        UI_HotkeyToDisplay(cfg.hotkey))
-    g.SetFont("s10", FONT_FAMILY)
-    g.AddText("x40 ys+68 w190 h22 c" CLR_TEXT, "Только скопировать")
-    g.SetFont("s10 bold", FONT_FAMILY)
-    g.AddText("x238 ys+60 w200 h30 Center Background" CLR_CARD " Border c" CLR_ACCENT,
-        UI_HotkeyToDisplay(cfg.hotkeyCopy))
-    g.SetFont("s8.5", FONT_FAMILY)
-    g.AddText("x40 ys+100 w410 h18 c" CLR_MUTED, "Формат: ^ = Ctrl, + = Shift, ! = Alt, # = Win (как в config.ini)")
-    g.SetFont("s10", FONT_FAMILY)
-
-    ; ---------- Файлы ----------
-    g.AddGroupBox("x24 y352 w432 h76 Section", "Файлы")
-    g.AddText("x40 ys+18 w380 h20 c" CLR_TEXT, "Расположение конфигурации:")
-    g.SetFont("s9", FONT_FAMILY)
-    g.AddText("x40 ys+40 w380 h22 c" CLR_MUTED, cfg.iniPath)
-
-    ; ---------- Кнопки ----------
-    btnSettings := g.AddButton("x24 y446 w130 h32", "Настройки…")
-    btnSettings.OnEvent("Click", (*) => UI_CloseAboutOpenSettings(g))
-    btnClose := g.AddButton("x338 y446 w118 h32 Default", "Закрыть")
-    btnClose.OnEvent("Click", (*) => g.Destroy())
-
-    ; ---------- Футер ----------
-    g.SetFont("s8.5", FONT_FAMILY)
-    g.AddText("x24 y488 w432 h18 Center c" CLR_MUTED,
-        "AltaiR Key Switcher v" APP_VERSION " · исправление раскладки RU ↔ EN")
-    g.SetFont("s10", FONT_FAMILY)
-
-    g.OnEvent("Close",  (*) => g.Destroy())
-    g.OnEvent("Escape", (*) => g.Destroy())
-    g.Show("w480 h520")
-
-    UI_CloseAboutOpenSettings(aboutGui) {
-        aboutGui.Destroy()
+    y := 112
+    descCard := GlassCard(win, {x: margin, y: y, w: contentW, h: 108})
+    descCard.SetFont("s12 norm", "Segoe UI")
+    descCard.AddText("x16 y16 w520 h80 BackgroundTrans c" muted,
+        "Исправляет текст, набранный не в той раскладке (RU ↔ EN).`n"
+        "Выделите текст и нажмите горячую клавишу — выделение будет заменено исправленным текстом.")
+    y += 132
+    win.SetFont("s15 bold", "Segoe UI")
+    win.AddText("x24 y" y " w552 h28 c" fg, "Горячие клавиши")
+    y += 40
+    cardWidth := 270
+    hk1 := GlassCard(win, {x: margin, y: y, w: cardWidth, h: 96})
+    hk1.SetFont("s11 norm", "Segoe UI")
+    hk1.AddText("x16 y12 w238 h24 BackgroundTrans c" fg, "Исправить и вставить")
+    hk1.SetFont("s12 bold", "Segoe UI")
+    hk1.AddText("x16 y46 w238 h30 BackgroundTrans c" accent, UI_HotkeyToDisplay(cfg.hotkey))
+    hk2 := GlassCard(win, {x: margin + cardWidth + 12, y: y, w: cardWidth, h: 96})
+    hk2.SetFont("s11 norm", "Segoe UI")
+    hk2.AddText("x16 y12 w238 h24 BackgroundTrans c" fg, "Только скопировать")
+    hk2.SetFont("s12 bold", "Segoe UI")
+    hk2.AddText("x16 y46 w238 h30 BackgroundTrans c" accent, UI_HotkeyToDisplay(cfg.hotkeyCopy))
+    y += 112
+    win.SetFont("s10 norm", "Segoe UI")
+    win.AddText("x24 y" y " w552 h24 c" muted, "Отмена замены: Ctrl + Z в приложении, где вы исправляли текст.")
+    y += 36
+    Divider(win, {x: margin, y: y, w: contentW})
+    y += 16
+    ConfigPathDisplay(win, cfg.iniPath, {x: margin, y: y, w: contentW})
+    y += 44
+    openSettings(*) {
+        win.Destroy()
         UI_ShowSettings()
     }
+    win.SetFont("s11 norm", "Segoe UI")
+    FooterActions(win, openSettings, (*) => win.Destroy(), {
+        x: margin, y: y, w: contentW, SaveText: "Настройки", CancelText: "Закрыть"
+    })
+    y += 60
+    win.SetFont("s10 norm", "Segoe UI")
+    win.AddText("x24 y" y " w552 h22 Center c" muted, "AltaiR Key Switcher v" APP_VERSION " · исправление раскладки RU ↔ EN")
+    win.Show("w600 h" (y + 42))
+    return win
 }
 
-; ============================================================
-;  UI_ShowSettings() — окно «Настройки» (редактор config.ini)
-;  Читает ini при открытии, пишет при сохранении и применяет
-;  значения сразу (без перезапуска), перерегистрируя хоткеи.
-; ============================================================
 UI_ShowSettings() {
     global cfg
+    DesignTokens.DetectSystemTheme()
+    win := GlassWindow("Настройки — " APP_NAME)
+    margin := DesignTokens.Space(6)
+    contentW := 552
+    fg := DesignTokens.GetTextColor("fg-primary", DesignTokens.IsDarkMode)
+    win.SetFont("s18 bold", "Segoe UI")
+    win.AddText("x24 y20 w552 h34 c" fg, "Настройки")
+    win.SetFont("s11 norm", "Segoe UI")
+    win.Search := SearchBox(win, "Поиск настроек… (Ctrl + F)", {
+        x: margin, y: 64, w: contentW, h: 34,
+        OnSearch: (query) => UI_SettingsFilter(win, query)
+    })
+    win.BindShortcut("^f", (*) => win.Search.Control.Focus())
+    tabs := [
+        {id: "hotkeys", label: "Горячие клавиши", icon: Icons.Keyboard},
+        {id: "main", label: "Основные", icon: Icons.Settings},
+        {id: "advanced", label: "Дополнительно", icon: Icons.Info}
+    ]
+    navigation := TabBar(win, tabs, {
+        x: margin, y: 112, w: contentW, Selected: "hotkeys",
+        OnChange: (id) => UI_SettingsSwitchTab(win, id)
+    })
+    win._TabBar := navigation
+    panels := Map()
     ini := cfg.iniPath
-
-    cur_hk     := IniRead(ini, "Hotkeys", "Hotkey", "^+X")
-    cur_hkCopy := IniRead(ini, "Hotkeys", "HotkeyCopyOnly", "^!+X")
-    cur_auto   := Integer(IniRead(ini, "Main", "AutoPaste", "1"))
-    cur_sound  := Integer(IniRead(ini, "Main", "Sound", "0"))
-    cur_restore:= Integer(IniRead(ini, "Main", "RestoreClipboard", "0"))
-    cur_ms     := Integer(IniRead(ini, "Main", "TooltipMs", "2500"))
-    cur_copy   := IniRead(ini, "Main", "CopyKey", "^c")
-    cur_layout := Integer(IniRead(ini, "Main", "SwitchLayout", "0"))
-
-    g := Gui("+AlwaysOnTop +OwnDialogs", "Настройки — " APP_NAME)
-    g.BackColor := CLR_BG
-    g.SetFont("s10", FONT_FAMILY)
-
-    ; ---------- Горячие клавиши ----------
-    g.AddGroupBox("x24 y16 w412 h150 Section", "Горячие клавиши")
-    g.AddText("x40 ys+22 w200 h22 c" CLR_TEXT, "Конвертировать и вставить")
-    edHotkey := g.AddEdit("x240 ys+18 w170", cur_hk)
-    g.AddText("x40 ys+52 w200 h22 c" CLR_TEXT, "Только скопировать")
-    edHotkeyCopy := g.AddEdit("x240 ys+48 w170", cur_hkCopy)
-    g.SetFont("s8.5", FONT_FAMILY)
-    g.AddText("x40 ys+80 w372 h30 c" CLR_MUTED,
-        "Формат AHK: ^ = Ctrl, + = Shift, ! = Alt, # = Win.`n"
-        . "Пример: ^+X = Ctrl + Shift + X.")
-    g.SetFont("s10", FONT_FAMILY)
-
-    ; ---------- Основные параметры ----------
-    g.AddGroupBox("x24 y178 w412 h248 Section", "Основные параметры")
-    chkAuto := g.AddCheckbox("x40 ys+16 w372 h34", "Заменить выделение исправленным текстом сразу (AutoPaste)")
-    chkAuto.Value := cur_auto
-    chkSound := g.AddCheckbox("x40 ys+56 w372 h34", "Звуковой сигнал при срабатывании (Sound)")
-    chkSound.Value := cur_sound
-    chkRestore := g.AddCheckbox("x40 ys+96 w372 h34", "Возвращать прежнее содержимое буфера обмена (RestoreClipboard)")
-    chkRestore.Value := cur_restore
-    chkLayout := g.AddCheckbox("x40 ys+136 w372 h34", "Менять раскладку клавиатуры: исправил текст — сменил и язык ввода (SwitchLayout)")
-    chkLayout.Value := cur_layout
-
-    g.AddText("x40 ys+178 w210 h22 c" CLR_TEXT, "Время показа подсказки (TooltipMs), мс")
-    edMs := g.AddEdit("x252 ys+174 w80", cur_ms)
-
-    g.AddText("x40 ys+216 w210 h22 c" CLR_TEXT, "Клавиша «копировать» (CopyKey)")
-    edCopy := g.AddEdit("x252 ys+212 w66", cur_copy)
-    g.SetFont("s8.5", FONT_FAMILY)
-    g.AddText("x322 ys+214 w96 h22 c" CLR_MUTED, "напр. ^c")
-    g.SetFont("s10", FONT_FAMILY)
-
-    ; ---------- Футер и кнопки ----------
-    g.SetFont("s8.5", FONT_FAMILY)
-    g.AddText("x24 y436 w412 h20 Center c" CLR_MUTED,
-        "Изменения применяются сразу, без перезапуска программы.")
-    g.SetFont("s10", FONT_FAMILY)
-
-    btnCancel := g.AddButton("x332 y470 w104 h30", "Отмена")
-    btnCancel.OnEvent("Click", (*) => g.Destroy())
-    btnSave := g.AddButton("x224 y470 w104 h30 Default", "Сохранить")
-    btnSave.OnEvent("Click",
-        (*) => UI_SaveSettings(g, edHotkey, edHotkeyCopy, chkAuto, chkSound,
-            chkRestore, chkLayout, edMs, edCopy))
-
-    g.OnEvent("Close",  (*) => g.Destroy())
-    g.OnEvent("Escape", (*) => g.Destroy())
-    g.Show("w460 h524")
+    panels["hotkeys"] := UI_BuildPanel(win, UI_CreateHotkeysTab, margin, 164, contentW,
+        IniRead(ini, "Hotkeys", "Hotkey", "^+X"), IniRead(ini, "Hotkeys", "HotkeyCopyOnly", "^!+X"))
+    panels["main"] := UI_BuildPanel(win, UI_CreateMainTab, margin, 164, contentW,
+        Integer(IniRead(ini, "Main", "AutoPaste", "1")), Integer(IniRead(ini, "Main", "Sound", "0")),
+        Integer(IniRead(ini, "Main", "RestoreClipboard", "0")), Integer(IniRead(ini, "Main", "TooltipMs", "2500")),
+        IniRead(ini, "Main", "CopyKey", "^c"), Integer(IniRead(ini, "Main", "SwitchLayout", "0")))
+    panels["advanced"] := UI_BuildPanel(win, UI_CreateAdvancedTab, margin, 164, contentW)
+    win._Panels := panels
+    win._CurrentTab := "hotkeys"
+    for id, panel in panels
+        UI_SetPanelVisible(panel, id = "hotkeys")
+    win.SetFont("s12 norm", "Segoe UI")
+    win.NoResults := win.AddText("x24 y200 w552 h50 Hidden c" fg, "По этому запросу ничего не найдено.")
+    win.SetFont("s10 norm", "Segoe UI")
+    win.Status := win.AddText("x24 y540 w552 h44 c" DesignTokens.GetTextColor("accent", DesignTokens.IsDarkMode), "")
+    win.SetFont("s11 norm", "Segoe UI")
+    win.Footer := FooterActions(win, (*) => UI_SaveSettingsFromUI(win, panels), (*) => win.Destroy(),
+        {x: margin, y: 590, w: contentW})
+    win.Show("w600 h654")
+    return win
 }
 
-; ============================================================
-;  UI_SaveSettings(...) — валидация, запись в config.ini,
-;  применение в памяти и перерегистрация хоткеев.
-; ============================================================
-UI_SaveSettings(g, edHotkey, edHotkeyCopy, chkAuto, chkSound, chkRestore, chkLayout, edMs, edCopy) {
+UI_BuildPanel(win, builder, args*) {
+    existing := Map()
+    for ctrl in win.Gui
+        existing[ctrl.Hwnd] := true
+    panel := builder(win, args*)
+    panel.NativeControls := []
+    for ctrl in win.Gui {
+        if !existing.Has(ctrl.Hwnd)
+            panel.NativeControls.Push(ctrl)
+    }
+    return panel
+}
+
+UI_CreateHotkeysTab(win, x, y, w, hk, hkCopy) {
+    panel := {Controls: [], SearchText: "горячие клавиши хоткей выделение вставить скопировать буфер ctrl shift alt win"}
+    SectionHeader(win, "Горячие клавиши", {x: x, y: y, w: w})
+    y += 42
+    panel.Main := HotkeyEditor(win, "Исправить выделение и вставить", hk, {x: x, y: y, w: w, name: "hk_main"})
+    panel.Controls.Push(panel.Main)
+    y += 94
+    panel.Copy := HotkeyEditor(win, "Исправить выделение и только скопировать", hkCopy, {x: x, y: y, w: w, name: "hk_copy"})
+    panel.Controls.Push(panel.Copy)
+    y += 100
+    win.SetFont("s11 norm", "Segoe UI")
+    win.AddText("x" x " y" y " w" w " h60 c" DesignTokens.GetTextColor("fg-secondary", DesignTokens.IsDarkMode),
+        "Задайте сочетание клавиш в поле. Изменения применятся после нажатия «Сохранить».")
+    return panel
+}
+
+UI_CreateMainTab(win, x, y, w, autoPaste, sound, restore, ms, copyKey, switchLayout) {
+    panel := {Controls: [], SearchText: "основные параметры звук sound autopaste вставка буфер restoreclipboard раскладка switchlayout подсказка время tooltipms копировать copykey"}
+    SectionHeader(win, "Основные параметры", {x: x, y: y, w: w})
+    y += 40
+    win.SetFont("s11 norm", "Segoe UI")
+    panel.Auto := ToggleSwitch(win, "Сразу заменять выделение исправленным текстом", {x: x, y: y, w: w, Value: autoPaste})
+    panel.Sound := ToggleSwitch(win, "Звуковой сигнал при исправлении", {x: x, y: y + 40, w: w, Value: sound})
+    panel.Restore := ToggleSwitch(win, "Восстанавливать прежнее содержимое буфера", {x: x, y: y + 80, w: w, Value: restore})
+    panel.Layout := ToggleSwitch(win, "Менять язык ввода вслед за исправленным текстом", {x: x, y: y + 120, w: w, Value: switchLayout})
+    panel.Controls.Push(panel.Auto, panel.Sound, panel.Restore, panel.Layout)
+    y += 170
+    panel.Duration := Slider(win, "Время показа подсказки, мс", 50, 30000, ms, {x: x, y: y, w: w - 80, name: "slider_ms"})
+    y += 78
+    panel.CopyKey := HotkeyEditor(win, "Клавиша копирования выделения", StrReplace(StrReplace(copyKey, "{"), "}"), {x: x, y: y, w: w, name: "hk_copykey"})
+    panel.Controls.Push(panel.Duration, panel.CopyKey)
+    return panel
+}
+
+UI_CreateAdvancedTab(win, x, y, w) {
+    panel := {Controls: [], SearchText: "дополнительно сброс настройки умолчанию конфигурация config файл"}
+    SectionHeader(win, "Дополнительно", {x: x, y: y, w: w})
+    y += 48
+    win.SetFont("s11 norm", "Segoe UI")
+    win.AddText("x" x " y" y " w" w " h70 c" DesignTokens.GetTextColor("fg-secondary", DesignTokens.IsDarkMode),
+        "Сброс восстановит стандартные горячие клавиши и параметры в этом окне. Чтобы применить их, нажмите «Сохранить».")
+    y += 94
+    panel.Controls.Push(SecondaryButton(win, "Сбросить настройки", {x: x, y: y, w: 220, h: 40, OnClick: (*) => UI_ResetSettings(win)}))
+    return panel
+}
+
+UI_SetPanelVisible(panel, visible) {
+    panel.Visible := visible
+    for ctrl in panel.NativeControls
+        ctrl.Visible := visible
+}
+
+UI_SettingsSwitchTab(win, tabId) {
+    win._CurrentTab := tabId
+    win.NoResults.Visible := false
+    for id, panel in win._Panels
+        UI_SetPanelVisible(panel, id = tabId)
+}
+
+UI_SettingsFilter(win, query) {
+    if !win.HasOwnProp("_Panels")
+        return
+    query := StrLower(Trim(query))
+    if query = "" {
+        UI_SettingsSwitchTab(win, win._CurrentTab)
+        return
+    }
+    for id, panel in win._Panels {
+        if InStr(panel.SearchText, query) {
+            if win._TabBar.Selected != id
+                win._TabBar._SelectTab(id)
+            else
+                UI_SettingsSwitchTab(win, id)
+            return
+        }
+    }
+    for id, panel in win._Panels
+        UI_SetPanelVisible(panel, false)
+    win.NoResults.Visible := true
+}
+
+UI_SaveSettingsFromUI(win, panels) {
+    hotkeys := panels["hotkeys"]
+    main := panels["main"]
+    values := {
+        hotkey: hotkeys.Main.GetValue(), hotkeyCopy: hotkeys.Copy.GetValue(),
+        autoPaste: main.Auto.GetValue(), sound: main.Sound.GetValue(), restore: main.Restore.GetValue(),
+        switchLayout: main.Layout.GetValue(), tooltipMs: main.Duration.GetValue(), copyKey: main.CopyKey.GetValue()
+    }
+    problem := UI_ApplySettings(values)
+    if problem != "" {
+        win.Status.Text := problem
+        return false
+    }
+    win.Destroy()
+    ToastManager.Show("Настройки сохранены.")
+    return true
+}
+
+UI_ValidateSettings(values) {
+    for name in ["hotkey", "hotkeyCopy", "copyKey"] {
+        hk := values.%name%
+        if !RegExMatch(hk, "^[\^!+#]*[^\s{}]+$")
+            return "Укажите корректные сочетания клавиш во всех полях."
+        key := RegExReplace(hk, "^[\^!+#]*")
+        if !GetKeyVK(key) && !GetKeySC(key)
+            return "Неизвестная клавиша: " key
+    }
+    if StrLower(UI_NormalizeHotkey(values.hotkey)) = StrLower(UI_NormalizeHotkey(values.hotkeyCopy))
+        return "Основной хоткей и хоткей копирования должны различаться."
+    if !IsInteger(values.tooltipMs) || values.tooltipMs < 50 || values.tooltipMs > 30000
+        return "Время подсказки: целое число от 50 до 30000 мс."
+    return ""
+}
+
+UI_NormalizeHotkey(hk) {
+    modifiers := RegExReplace(hk, "[^\^!+#].*$")
+    result := ""
+    for modifier in ["^", "!", "+", "#"] {
+        if InStr(modifiers, modifier)
+            result .= modifier
+    }
+    key := RegExReplace(hk, "^[\^!+#]*")
+    return result Format("vk{:X}sc{:X}", GetKeyVK(key), GetKeySC(key))
+}
+
+UI_HotkeyToSend(hk) {
+    if InStr(hk, "{")
+        return hk
+    RegExMatch(hk, "^([\^!+#]*)(.+)$", &parts)
+    return parts[1] "{" parts[2] "}"
+}
+
+UI_ApplySettings(values) {
     global cfg
-    ; RunConvert / ShowToast — глобальные функции главного скрипта;
-    ; явное объявление global убирает предупреждение #Warn LocalSameAsGlobal.
-    global RunConvert, ShowToast
-
-    hk      := Trim(edHotkey.Text)
-    hkCopy  := Trim(edHotkeyCopy.Text)
-    copyKey := Trim(edCopy.Text)
-    msText  := Trim(edMs.Text)
-
-    ; ---------- Проверка значений ----------
-    if hk = "" || !RegExMatch(hk, "^[0-9A-Za-z#!+^<>* ]+$") {
-        MsgBox("Некорректный основной хоткей: «" hk "»`n"
-            . "Формат AHK: ^ — Ctrl, + — Shift, ! — Alt, # — Win.", "Настройки")
-        return
-    }
-    if hkCopy = "" || !RegExMatch(hkCopy, "^[0-9A-Za-z#!+^<>* ]+$") {
-        MsgBox("Некорректный хоткей «только скопировать»: «" hkCopy "»`n"
-            . "Формат AHK: ^ — Ctrl, + — Shift, ! — Alt, # — Win.", "Настройки")
-        return
-    }
-    if copyKey = "" || !RegExMatch(copyKey, "^[0-9A-Za-z#!+^<>* ]+$") {
-        MsgBox("Некорректная клавиша «копировать»: «" copyKey "»`n"
-            . "По умолчанию: ^c (Ctrl+C).", "Настройки")
-        return
-    }
-    try
-        ms := Integer(msText)
-    catch
-        ms := 0
-    if ms < 50 || ms > 30000 {
-        MsgBox("TooltipMs: укажите целое число от 50 до 30000 мс.", "Настройки")
-        return
-    }
-
-    ; ---------- Запись в config.ini ----------
+    problem := UI_ValidateSettings(values)
+    if problem != ""
+        return problem
+    oldMain := cfg.hotkey
+    oldCopy := cfg.hotkeyCopy
+    stagedIni := cfg.iniPath "." DllCall("GetCurrentProcessId") ".tmp"
     try {
-        IniWrite(hk,      cfg.iniPath, "Hotkeys", "Hotkey")
-        IniWrite(hkCopy,  cfg.iniPath, "Hotkeys", "HotkeyCopyOnly")
-        IniWrite(chkAuto.Value ? 1 : 0,   cfg.iniPath, "Main", "AutoPaste")
-        IniWrite(chkSound.Value ? 1 : 0,  cfg.iniPath, "Main", "Sound")
-        IniWrite(chkRestore.Value ? 1 : 0,cfg.iniPath, "Main", "RestoreClipboard")
-        IniWrite(chkLayout.Value ? 1 : 0, cfg.iniPath, "Main", "SwitchLayout")
-        IniWrite(ms,      cfg.iniPath, "Main", "TooltipMs")
-        IniWrite(copyKey, cfg.iniPath, "Main", "CopyKey")
-    } catch {
-        MsgBox("Не удалось записать настройки:`n" cfg.iniPath "`n`n"
-            . "Проверьте права на запись в этот файл.", "Настройки")
-        return
+        if FileExist(cfg.iniPath)
+            FileCopy(cfg.iniPath, stagedIni, true)
+        IniWrite(values.hotkey, stagedIni, "Hotkeys", "Hotkey")
+        IniWrite(values.hotkeyCopy, stagedIni, "Hotkeys", "HotkeyCopyOnly")
+        for field, key in Map("autoPaste", "AutoPaste", "sound", "Sound", "restore", "RestoreClipboard",
+            "switchLayout", "SwitchLayout", "tooltipMs", "TooltipMs", "copyKey", "CopyKey")
+            IniWrite(values.%field%, stagedIni, "Main", key)
+        if oldMain != ""
+            Hotkey(oldMain, "Off")
+        if oldCopy != ""
+            Hotkey(oldCopy, "Off")
+        Hotkey(values.hotkey, (*) => RunConvert(false), "On")
+        Hotkey(values.hotkeyCopy, (*) => RunConvert(true), "On")
+        FileMove(stagedIni, cfg.iniPath, true)
+    } catch as err {
+        try Hotkey(values.hotkey, "Off")
+        try Hotkey(values.hotkeyCopy, "Off")
+        if oldMain != ""
+            Hotkey(oldMain, (*) => RunConvert(false), "On")
+        if oldCopy != ""
+            Hotkey(oldCopy, (*) => RunConvert(true), "On")
+        return "Не удалось применить настройки: " err.Message
+    } finally {
+        if FileExist(stagedIni)
+            FileDelete(stagedIni)
     }
+    for field, value in values.OwnProps()
+        cfg.%field% := value
+    return ""
+}
 
-    ; ---------- Применение в памяти (без перезапуска) ----------
-    oldHk     := cfg.hotkey
-    oldHkCopy := cfg.hotkeyCopy
-    cfg.hotkey     := hk
-    cfg.hotkeyCopy := hkCopy
-    cfg.autoPaste  := chkAuto.Value ? 1 : 0
-    cfg.sound      := chkSound.Value ? 1 : 0
-    cfg.restore    := chkRestore.Value ? 1 : 0
-    cfg.switchLayout := chkLayout.Value ? 1 : 0
-    cfg.tooltipMs  := ms
-    cfg.copyKey    := copyKey
+UI_ResetSettings(win) {
+    hotkeys := win._Panels["hotkeys"]
+    main := win._Panels["main"]
+    hotkeys.Main.SetValue("^+X")
+    hotkeys.Copy.SetValue("^!+X")
+    main.Auto.SetValue(1)
+    main.Sound.SetValue(0)
+    main.Restore.SetValue(0)
+    main.Layout.SetValue(0)
+    main.Duration.SetValue(2500)
+    main.CopyKey.SetValue("^c")
+    win.Status.Text := "Значения по умолчанию восстановлены. Нажмите «Сохранить», чтобы применить."
+}
 
-    ; ---------- Перерегистрация хоткеев ----------
-    if hk != oldHk {
-        try
-            Hotkey(oldHk, "Off")
-        if hk != ""
-            Hotkey(hk, (*) => RunConvert(false))
-    }
-    if hkCopy != oldHkCopy {
-        try
-            Hotkey(oldHkCopy, "Off")
-        if hkCopy != ""
-            Hotkey(hkCopy, (*) => RunConvert(true))
-    }
-
-    ShowToast("Настройки сохранены.")
-    g.Destroy()
+ShowToast(msg, ms := 0) {
+    global cfg
+    ToastManager.Show(msg, {Duration: ms = 0 ? cfg.tooltipMs : ms})
 }

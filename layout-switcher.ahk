@@ -89,7 +89,7 @@ RunConvert(copyOnly := false) {
         activeHwnd := WinGetID("A")
 
         A_Clipboard := ""
-        SendInput(cfg.copyKey)
+        SendInput(UI_HotkeyToSend(cfg.copyKey))
 
         ; ждём, пока приложение положит выделение в буфер
         t := 0
@@ -249,17 +249,8 @@ MakePreview(raw, converted) {
     return SubStr(raw, 1, 20) "… → " SubStr(converted, 1, 20) "…"
 }
 
-ShowToast(msg, ms := 0) {
-    global cfg
-    if ms = 0
-        ms := cfg.tooltipMs
-    CoordMode("Mouse", "Screen")
-    CoordMode("ToolTip", "Screen")
-    MouseGetPos(&cursorX, &cursorY)
-    ToolTip(msg, cursorX + 24, cursorY + 24)
-    SetTimer(() => ToolTip(), -ms)
-}
+; ShowToast определена в src\ui.ahk (ToastManager); здесь только вызовы.
 
 ; UI-модуль подключается в конце, чтобы функции главного скрипта
-; (RunConvert, ShowToast) были видны статическому анализатору.
+; (RunConvert, MakePreview) были видны статическому анализатору.
 #include "src\ui.ahk"
