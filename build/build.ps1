@@ -52,6 +52,8 @@ Push-Location $root
 try {
     $rc = Invoke-Tool $runtime @('/ErrorStdOut', '/validate', (Join-Path $root 'layout-switcher.ahk'))
     if ($rc -ne 0) { throw 'Application syntax validation failed.' }
+    $rc = Invoke-Tool $runtime @('/ErrorStdOut', (Join-Path $root 'test-conversion.ahk'))
+    if ($rc -ne 0) { throw 'Selection/clipboard conversion tests failed.' }
     $resultFile = Join-Path $env:TEMP ('keyswitcher-smoke-' + [guid]::NewGuid().ToString('N') + '.txt')
     try {
         $rc = Invoke-Tool $runtime @('/ErrorStdOut', (Join-Path $root 'test-ui.ahk'), '--smoke', '--result', $resultFile)

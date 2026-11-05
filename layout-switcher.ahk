@@ -85,23 +85,32 @@ RunConvert(copyOnly := false) {
         return
     busy := 1
     try {
-        saved := A_Clipboard
+        saved := ClipboardAll()
         activeHwnd := WinGetID("A")
+        sourceFocus := ControlGetFocus("ahk_id " activeHwnd)
 
         A_Clipboard := ""
+        clearedSequence := DllCall("GetClipboardSequenceNumber", "UInt")
         SendInput(UI_HotkeyToSend(cfg.copyKey))
 
         ; ждём, пока приложение положит выделение в буфер
-        t := 0
-        while (A_Clipboard = "" && t < 1500) {
-            Sleep(10)
-            t += 10
+        if !ClipWait(1.5) {
+            A_Clipboard := saved
+            ShowToast("Не удалось скопировать выделение.`nПроверьте клавишу копирования (обычно Ctrl+C).")
+            return
         }
 
         raw := A_Clipboard
-        if raw = "" {
+        if raw = "" || DllCall("GetClipboardSequenceNumber", "UInt") = clearedSequence
+            || !ClipboardMatchesSource(activeHwnd) {
             A_Clipboard := saved
-            ShowToast("Нет текста для преобразования.`nВыделите текст и нажмите снова.")
+            ShowToast("Не удалось получить выделение из исходного приложения. Текст не изменён.")
+            return
+        }
+
+        if !ConversionTargetActive(activeHwnd, sourceFocus) {
+            A_Clipboard := saved
+            ShowToast("Окно или поле ввода сменилось. Исправление отменено.")
             return
         }
 
@@ -117,20 +126,48 @@ RunConvert(copyOnly := false) {
 
         converted := ConvertLayout(raw, dir)
         A_Clipboard := converted
-        ApplyLayoutSwitch(dir)
+        resultSequence := DllCall("GetClipboardSequenceNumber", "UInt")
         if cfg.sound
             SoundBeep(880, 90)
 
         ; автовставка — только если фокус не сменился
-        if !copyOnly && cfg.autoPaste && WinGetID("A") = activeHwnd
+        if !copyOnly && cfg.autoPaste {
+            if !ConversionTargetActive(activeHwnd, sourceFocus) {
+                ShowToast("Поле ввода сменилось. Результат оставлен в буфере.")
+                return
+            }
+            ApplyLayoutSwitch(dir, activeHwnd)
+            if !ConversionTargetActive(activeHwnd, sourceFocus) {
+                ShowToast("Поле ввода сменилось. Результат оставлен в буфере.")
+                return
+            }
             SendInput("^v")
-        else if cfg.restore
-            A_Clipboard := saved
-
-        ShowToast(MakePreview(raw, converted) "`nОтмена: Ctrl+Z")
+            if cfg.restore {
+                Sleep(150)
+                if DllCall("GetClipboardSequenceNumber", "UInt") = resultSequence
+                    A_Clipboard := saved
+            }
+            ShowToast(MakePreview(raw, converted) "`nОтмена: Ctrl+Z")
+        } else {
+            ShowToast(MakePreview(raw, converted) "`nРезультат скопирован в буфер.")
+        }
     } finally {
         busy := 0
     }
+}
+
+ConversionTargetActive(hwnd, focus) {
+    return WinActive("ahk_id " hwnd) && ControlGetFocus("ahk_id " hwnd) = focus
+}
+
+ClipboardMatchesSource(hwnd) {
+    owner := DllCall("GetClipboardOwner", "Ptr")
+    if !owner
+        return true
+    sourcePid := 0, ownerPid := 0
+    DllCall("GetWindowThreadProcessId", "Ptr", hwnd, "UInt*", &sourcePid)
+    DllCall("GetWindowThreadProcessId", "Ptr", owner, "UInt*", &ownerPid)
+    return sourcePid = ownerPid
 }
 
 ; ============================================================
@@ -164,14 +201,18 @@ ConvertClipboardStandalone() {
 ;  dir="RU" -> раскладка 0419 (русская),
 ;  dir="EN" -> раскладка 0409 (английская/US).
 ; ============================================================
-ApplyLayoutSwitch(dir) {
+ApplyLayoutSwitch(dir, targetHwnd := 0) {
     global cfg
     if !cfg.switchLayout
+        return
+    if !targetHwnd
+        targetHwnd := WinExist("A")
+    if !WinActive("ahk_id " targetHwnd)
         return
     klid := dir = 'RU' ? "00000419" : "00000409"
     hkl := DllCall("LoadKeyboardLayout", "Str", klid, "UInt", 0x1, "Ptr")
     if hkl
-        SendMessage(0x0050, 0, hkl, , "A")   ; WM_INPUTLANGCHANGEREQUEST
+        SendMessage(0x0050, 0, hkl, , "ahk_id " targetHwnd)   ; WM_INPUTLANGCHANGEREQUEST
 }
 
 ; ============================================================
