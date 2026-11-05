@@ -10,6 +10,14 @@ global cfg := {
 #Include "layout-map.ahk"
 #Include "src\ui.ahk"
 
+; Preview flags affect only this isolated fixture, never the user's settings.
+for arg in A_Args {
+    if arg = "--light" || arg = "--dark"
+        IniWrite(SubStr(arg,3),cfg.iniPath,"Appearance","Theme")
+    if arg = "--solid"
+        IniWrite("solid",cfg.iniPath,"Appearance","Material")
+}
+
 RunConvert(copyOnly := false) {
     ToastManager.Show(copyOnly ? "Тест: копирование" : "Тест: вставка")
 }
@@ -44,11 +52,19 @@ if A_Args.Length && A_Args[1] = "--smoke" {
         Assert(UI_HotkeyToSend("^Insert") = "^{Insert}", "named copy key send syntax")
         Assert(UI_HotkeyToSend("^{Insert}") = "^{Insert}", "legacy copy key send syntax")
         Assert(UI_NormalizeHotkey("^Esc") = UI_NormalizeHotkey("^Escape"), "hotkey aliases")
+        report("CHECK: opening About")
         aboutWindow := UI_ShowAbout()
+        report("CHECK: closing About")
         aboutWindow.Destroy()
+        report("CHECK: opening Settings")
         settingsWindow := UI_ShowSettings()
+        report("CHECK: Settings opened")
         Assert(settingsWindow._Panels["hotkeys"].Visible, "initial hotkeys tab")
         Assert(!settingsWindow._Panels["main"].Visible, "main tab initially hidden")
+        autoToggle := settingsWindow._Panels["main"].Auto
+        SendMessage(0xF5,0,0,autoToggle.Control.Hwnd)
+        Assert(autoToggle.GetValue() = 0, "native toggle click updates state")
+        autoToggle.SetValue(1)
         settingsWindow._TabBar._SelectTab("main")
         Assert(settingsWindow._Panels["main"].Visible, "main tab selection")
         for ctrl in settingsWindow._Panels["hotkeys"].NativeControls
@@ -69,12 +85,17 @@ if A_Args.Length && A_Args[1] = "--smoke" {
         mainPanel.CopyKey.SetValue("^Insert")
         hotkeysPanel.Main.SetValue("^!F11")
         hotkeysPanel.Copy.SetValue("^!F12")
+        settingsWindow._Panels["appearance"].Theme.Choose(3)
+        settingsWindow._Panels["appearance"].Glass.SetValue(0)
         Assert(UI_SaveSettingsFromUI(settingsWindow, settingsWindow._Panels), "save valid settings")
         Assert(IniRead(cfg.iniPath, "Main", "CopyKey") = "^Insert", "copy key persisted")
         Assert(IniRead(cfg.iniPath, "Main", "TooltipMs") = "4200", "duration persisted")
         Assert(cfg.sound = 1 && cfg.restore = 1 && cfg.autoPaste = 0 && cfg.switchLayout = 1, "toggles applied")
         Assert(cfg.hotkey = "^!F11" && cfg.hotkeyCopy = "^!F12", "hotkeys applied")
+        Assert(IniRead(cfg.iniPath,"Appearance","Theme") = "dark", "theme persisted")
+        Assert(IniRead(cfg.iniPath,"Appearance","Material") = "solid", "material persisted")
         settingsWindow := UI_ShowSettings()
+        Assert(DesignTokens.IsDarkMode && !settingsWindow.BackdropEnabled, "solid dark theme applied")
         Assert(settingsWindow._Panels["main"].CopyKey.GetValue() = "^Insert", "reopen settings")
         before := FileRead(cfg.iniPath)
         settingsWindow._Panels["hotkeys"].Copy.SetValue("^!F11")
@@ -95,6 +116,7 @@ if A_Args.Length && A_Args[1] = "--smoke" {
         Assert(ToastManager.Toasts.Length = 5, "toast limit")
         ToastManager.DismissAll()
         Assert(ToastManager.Toasts.Length = 0, "toast cleanup")
+        Assert(GlassPaint.Items.Count = 0 && GlassPaint.Toggles.Count = 0 && GlassPaint.Windows.Count = 0, "paint bindings released")
         report("PASS: " pairs " map pairs; About, tabs, search, settings persistence, validation, reset, toasts.")
         ExitApp(0)
     } catch as err {

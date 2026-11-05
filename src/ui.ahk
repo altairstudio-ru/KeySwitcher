@@ -1,10 +1,11 @@
 #Requires AutoHotkey v2.0
 #Include "ui\tokens.ahk"
 #Include "ui\core.ahk"
+#Include "ui\paint.ahk"
 #Include "ui\components.ahk"
 
 APP_NAME := "AltaiR Key Switcher"
-APP_VERSION := "2.0.1"
+APP_VERSION := "2.1.0"
 
 UI_HotkeyToDisplay(hk) {
     out := ""
@@ -16,9 +17,22 @@ UI_HotkeyToDisplay(hk) {
     return out StrUpper(hk)
 }
 
-UI_ShowAbout() {
+UI_LoadAppearance() {
     global cfg
     DesignTokens.DetectSystemTheme()
+    theme := IniRead(cfg.iniPath, "Appearance", "Theme", "system")
+    if theme != "system"
+        DesignTokens.IsDarkMode := theme = "dark"
+    DesignTokens.Material := IniRead(cfg.iniPath, "Appearance", "Material", "glass")
+    hc := Buffer(A_PtrSize=8 ? 16 : 12, 0)
+    NumPut("UInt", hc.Size, hc)
+    DesignTokens.HighContrast := DllCall("SystemParametersInfo", "UInt", 0x42, "UInt", hc.Size, "Ptr", hc, "UInt", 0)
+        && (NumGet(hc,4,"UInt") & 1)
+}
+
+UI_ShowAbout() {
+    global cfg
+    UI_LoadAppearance()
     win := GlassWindow("О программе — " APP_NAME)
     margin := DesignTokens.Space(6)
     contentW := 552
@@ -30,9 +44,9 @@ UI_ShowAbout() {
     if FileExist(imgPath)
         win.AddPicture("x24 y28 w" logoSize " h" logoSize, imgPath)
     win.SetFont("s22 bold", "Segoe UI")
-    win.AddText("x96 y26 w480 h36 c" fg, APP_NAME)
+    GlassPaint.Surface(win,96,22,480,42,16,"bg-card",APP_NAME,22)
     win.SetFont("s11 norm", "Segoe UI")
-    win.AddText("x96 y66 w460 h24 c" muted, "Версия " APP_VERSION " · RU ↔ EN")
+    GlassPaint.Surface(win,96,66,480,30,12,"bg-card","Версия " APP_VERSION " · RU ↔ EN",12)
 
     y := 112
     descCard := GlassCard(win, {x: margin, y: y, w: contentW, h: 108})
@@ -80,13 +94,13 @@ UI_ShowAbout() {
 
 UI_ShowSettings() {
     global cfg
-    DesignTokens.DetectSystemTheme()
+    UI_LoadAppearance()
     win := GlassWindow("Настройки — " APP_NAME)
     margin := DesignTokens.Space(6)
     contentW := 552
     fg := DesignTokens.GetTextColor("fg-primary", DesignTokens.IsDarkMode)
     win.SetFont("s18 bold", "Segoe UI")
-    win.AddText("x24 y20 w552 h34 c" fg, "Настройки")
+    GlassPaint.Surface(win,24,12,552,42,16,"bg-card","Настройки",23)
     win.SetFont("s11 norm", "Segoe UI")
     win.Search := SearchBox(win, "Поиск настроек… (Ctrl + F)", {
         x: margin, y: 64, w: contentW, h: 34,
@@ -94,9 +108,10 @@ UI_ShowSettings() {
     })
     win.BindShortcut("^f", (*) => win.Search.Control.Focus())
     tabs := [
-        {id: "hotkeys", label: "Горячие клавиши", icon: Icons.Keyboard},
+        {id: "hotkeys", label: "Клавиши", icon: Icons.Keyboard},
         {id: "main", label: "Основные", icon: Icons.Settings},
-        {id: "advanced", label: "Дополнительно", icon: Icons.Info}
+        {id: "appearance", label: "Оформление"},
+        {id: "advanced", label: "Ещё", icon: Icons.Info}
     ]
     navigation := TabBar(win, tabs, {
         x: margin, y: 112, w: contentW, Selected: "hotkeys",
@@ -112,6 +127,7 @@ UI_ShowSettings() {
         Integer(IniRead(ini, "Main", "RestoreClipboard", "0")), Integer(IniRead(ini, "Main", "TooltipMs", "2500")),
         IniRead(ini, "Main", "CopyKey", "^c"), Integer(IniRead(ini, "Main", "SwitchLayout", "0")))
     panels["advanced"] := UI_BuildPanel(win, UI_CreateAdvancedTab, margin, 164, contentW)
+    panels["appearance"] := UI_BuildPanel(win, UI_CreateAppearanceTab, margin, 164, contentW)
     win._Panels := panels
     win._CurrentTab := "hotkeys"
     for id, panel in panels
@@ -186,6 +202,23 @@ UI_CreateAdvancedTab(win, x, y, w) {
     return panel
 }
 
+UI_CreateAppearanceTab(win, x, y, w) {
+    global cfg
+    panel := {Controls: [], SearchText: "оформление тема светлая тёмная темная системная стекло прозрачность glass"}
+    SectionHeader(win, "Оформление", {x:x,y:y,w:w})
+    theme := IniRead(cfg.iniPath,"Appearance","Theme","system")
+    material := IniRead(cfg.iniPath,"Appearance","Material","glass")
+    win.SetFont("s11 norm c" DesignTokens.GetTextColor("fg-primary",DesignTokens.IsDarkMode),"Segoe UI")
+    win.AddText("x" x " y" (y+48) " w" w " h24", "Цветовая тема")
+    panel.Theme := win.Gui.AddDropDownList("x" x " y" (y+80) " w" w " Choose" (theme="light" ? 2 : theme="dark" ? 3 : 1),
+        ["Как в Windows", "Светлая", "Тёмная"])
+    panel.Glass := ToggleSwitch(win,"Стеклянная панель окна",{x:x,y:y+142,w:w,h:28,Value:material="glass"})
+    win.SetFont("s10 norm c" DesignTokens.GetTextColor("fg-secondary",DesignTokens.IsDarkMode),"Segoe UI")
+    win.AddText("x" x " y" (y+190) " w" w " h96",
+        "Стекло доступно в Windows 11 22H2 и новее при включённых эффектах прозрачности. На других системах используется непрозрачная тема.`n`nОформление применится после сохранения и повторного открытия окна.")
+    return panel
+}
+
 UI_SetPanelVisible(panel, visible) {
     panel.Visible := visible
     for ctrl in panel.NativeControls
@@ -229,6 +262,9 @@ UI_SaveSettingsFromUI(win, panels) {
         autoPaste: main.Auto.GetValue(), sound: main.Sound.GetValue(), restore: main.Restore.GetValue(),
         switchLayout: main.Layout.GetValue(), tooltipMs: main.Duration.GetValue(), copyKey: main.CopyKey.GetValue()
     }
+    appearance := panels["appearance"]
+    values.theme := ["system","light","dark"][appearance.Theme.Value]
+    values.material := appearance.Glass.GetValue() ? "glass" : "solid"
     problem := UI_ApplySettings(values)
     if problem != "" {
         win.Status.Text := problem
@@ -289,6 +325,10 @@ UI_ApplySettings(values) {
         for field, key in Map("autoPaste", "AutoPaste", "sound", "Sound", "restore", "RestoreClipboard",
             "switchLayout", "SwitchLayout", "tooltipMs", "TooltipMs", "copyKey", "CopyKey")
             IniWrite(values.%field%, stagedIni, "Main", key)
+        if HasOption(values,"theme") {
+            IniWrite(values.theme, stagedIni, "Appearance", "Theme")
+            IniWrite(values.material, stagedIni, "Appearance", "Material")
+        }
         if oldMain != ""
             Hotkey(oldMain, "Off")
         if oldCopy != ""
@@ -324,6 +364,8 @@ UI_ResetSettings(win) {
     main.Layout.SetValue(0)
     main.Duration.SetValue(2500)
     main.CopyKey.SetValue("^c")
+    win._Panels["appearance"].Theme.Choose(1)
+    win._Panels["appearance"].Glass.SetValue(1)
     win.Status.Text := "Значения по умолчанию восстановлены. Нажмите «Сохранить», чтобы применить."
 }
 

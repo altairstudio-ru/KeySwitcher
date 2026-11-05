@@ -270,6 +270,8 @@ class GlassWindow {
         this.Shortcuts := []
         this.Gui := Gui(opts, this.Title)
         this.Hwnd := this.Gui.Hwnd
+        GlassPaint.Init()
+        GlassPaint.Windows[this.Hwnd] := this
         
         ; Apply theme-aware background
         this._ApplyTheme()
@@ -290,6 +292,7 @@ class GlassWindow {
     }
     
     _EnableBackdrop() {
+        this.BackdropEnabled := false
         if VerCompare(A_OSVersion, "10.0.17763") < 0
             return
         dark := DesignTokens.IsDarkMode ? 1 : 0
@@ -299,8 +302,18 @@ class GlassWindow {
             DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", this.Hwnd, "UInt", 33, "Int*", &corners, "UInt", 4)
         }
         if VerCompare(A_OSVersion, "10.0.22621") >= 0 {
-            backdrop := 2
-            DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", this.Hwnd, "UInt", 38, "Int*", &backdrop, "UInt", 4)
+            allowed := DesignTokens.Material = "glass" && !DesignTokens.HighContrast
+                && RegRead("HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 1)
+            backdrop := allowed ? 3 : 1
+            result := DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", this.Hwnd, "UInt", 38, "Int*", &backdrop, "UInt", 4)
+            ; Reserve the header for the system material; content stays opaque.
+            margins := Buffer(16, 0)
+            NumPut("Int", allowed ? Round(106 * A_ScreenDPI / 96) : 0, margins, 8)
+            if result = 0 && allowed {
+                DllCall("dwmapi\DwmExtendFrameIntoClientArea", "Ptr", this.Hwnd, "Ptr", margins)
+                this.BackdropEnabled := true
+            } else
+                DllCall("dwmapi\DwmExtendFrameIntoClientArea", "Ptr", this.Hwnd, "Ptr", margins)
         }
     }
     
@@ -404,6 +417,7 @@ class GlassWindow {
     }
 
     Destroy() {
+        GlassPaint.Release(this.Gui)
         HotIfWinActive("ahk_id " this.Hwnd)
         try {
             for key in this.Shortcuts

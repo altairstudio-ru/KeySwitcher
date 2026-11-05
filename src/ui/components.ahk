@@ -67,14 +67,14 @@ class GlassCard extends ComponentBase {
         bgColor := this.GetThemeTextColor("bg-card")
         
         ; Fill with the card surface, not an opaque border-colored bar.
-        this._bgCtrl := this.Parent.AddProgress(bgOpts " Background" bgColor " c" bgColor, 0)
+        this._bgCtrl := GlassPaint.Surface(this.Parent, x, y, w, h)
         this.Hwnd := this._bgCtrl.Hwnd
         
         ; GroupBox on top for border (optional, invisible)
         gbOpts := "Section x" x " y" y " w" w " h" h
         if name
             gbOpts .= " v" name "_gb"
-        this.Container := this.Parent.AddGroupBox(gbOpts, "")
+        this.Container := this.Parent.AddText(gbOpts " BackgroundTrans Hidden", "")
     }
     
     _StyleCard() {
@@ -190,6 +190,8 @@ class PrimaryButton extends ComponentBase {
         
         ; Default style: no border, accent background
         this.Control := this.Parent.AddButton(btnOpts, this.Text)
+        if !DesignTokens.HighContrast
+            GlassPaint.Attach(this.Control, "primary")
         
         ; Style via colors (limited in AHK)
         accent := this.GetThemeColor("accent")
@@ -247,6 +249,8 @@ class SecondaryButton extends ComponentBase {
             btnOpts .= " v" GetOption(opts, "name")
         
         this.Control := this.Parent.AddButton(btnOpts, this.Text)
+        if !DesignTokens.HighContrast
+            GlassPaint.Attach(this.Control, "secondary")
         
         if this.Callback
             this.Control.OnEvent("Click", (*) => this.Callback.Call())
@@ -285,10 +289,13 @@ class ToggleSwitch extends ComponentBase {
         this.Control := this.Parent.AddCheckbox(cbOpts, this.Text)
         this.Control.Value := this.Value
         this.Control.OnEvent("Click", (ctrl, *) => this._OnChange(ctrl.Value))
+        if !DesignTokens.HighContrast
+            GlassPaint.AttachToggle(this.Control)
     }
     
     _OnChange(value) {
         this.Value := value
+        this.Control.Redraw()
         if this.Callback
             this.Callback.Call(value)
     }
@@ -300,6 +307,11 @@ class ToggleSwitch extends ComponentBase {
     SetValue(value) {
         this.Value := !!value
         this.Control.Value := this.Value
+        this.Control.Redraw()
+    }
+
+    _Draw(ctrl, nm, *) {
+        return GlassPaint.DrawToggle(ctrl, nm)
     }
 }
 
@@ -343,6 +355,8 @@ class HotkeyEditor extends ComponentBase {
         if name
             hkOpts .= " v" name "_hk"
         this.Control := this.Parent.AddHotkey(hkOpts, "")
+        if VerCompare(A_OSVersion,"10.0.17763") >= 0
+            DllCall("uxtheme\SetWindowTheme","Ptr",this.Control.Hwnd,"Str",DesignTokens.IsDarkMode ? "DarkMode_Explorer" : "Explorer","Ptr",0)
         this.WinCtrl := this.Parent.AddCheckbox("x" (x + inputW + gap) " y" y " w" winW " h" h, "Win")
         this.DisplayCtrl := this.Control
         this.SetValue(this.Hotkey)
@@ -545,6 +559,15 @@ class ToastManager {
             this.Gui.OnEvent("Close", ObjBindMethod(this, "Dismiss"))
             this.Gui.OnEvent("Escape", ObjBindMethod(this, "Dismiss"))
             this.Gui.Show("Hide w" width " h" height)
+            if !DesignTokens.HighContrast {
+                rect := Buffer(16,0)
+                DllCall("GetClientRect","Ptr",this.Gui.Hwnd,"Ptr",rect)
+                radius := Round(24*A_ScreenDPI/96)
+                region := DllCall("CreateRoundRectRgn","Int",0,"Int",0,"Int",NumGet(rect,8,"Int")+1,
+                    "Int",NumGet(rect,12,"Int")+1,"Int",radius,"Int",radius,"Ptr")
+                if !DllCall("SetWindowRgn","Ptr",this.Gui.Hwnd,"Ptr",region,"Int",true)
+                    DllCall("DeleteObject","Ptr",region)
+            }
         }
 
         _RunAction(*) {
@@ -701,6 +724,7 @@ class SearchBox extends ComponentBase {
         if name
             editOpts .= " v" name
         this.Control := this.Parent.AddEdit(editOpts, "")
+        this.Control.Opt("Background" this.GetThemeTextColor("bg-card") " c" this.GetThemeTextColor("fg-primary"))
         DllCall("user32\SendMessageW", "Ptr", this.Control.Hwnd, "UInt", 0x1501, "Ptr", 0, "WStr", this.Placeholder)
         this.Control.OnEvent("Change", ObjBindMethod(this, "_OnChange"))
     }
@@ -895,14 +919,16 @@ class TabBar extends ComponentBase {
             accent := this.GetThemeTextColor("accent")
             indicator := this.Parent.AddProgress("x" tabX " y" (y + bh - 2) " w" bw
                 " h2 Background" accent " c" accent, 100)
-            indicator.Visible := selected
+            indicator.Visible := false
             this.Controls.Push({id: tab.id, btn: btn, indicator: indicator})
         }
     }
 
     _CreateTabButton(tab, icon, x, y, selected, width := 140) {
-        label := (icon ? icon " " : "") . tab.label
+        label := tab.label
         btn := this.Parent.AddButton("x" x " y" y " w" width " h36", label)
+        if !DesignTokens.HighContrast
+            GlassPaint.Attach(btn, "segment", selected)
         btn.SetFont(selected ? "bold" : "norm")
         btn.OnEvent("Click", ObjBindMethod(this, "_TabClick", tab.id))
         return btn
@@ -926,7 +952,8 @@ class TabBar extends ComponentBase {
         for tabCtrl in this.Controls {
             selected := tabCtrl.id = id
             tabCtrl.btn.SetFont(selected ? "bold" : "norm")
-            tabCtrl.indicator.Visible := this.Visible && selected
+            tabCtrl.indicator.Visible := false
+            GlassPaint.Select(tabCtrl.btn, selected)
         }
         if this.Callback
             this.Callback.Call(id)
@@ -940,7 +967,7 @@ class TabBar extends ComponentBase {
         this.Visible := !!visible
         for tabCtrl in this.Controls {
             tabCtrl.btn.Visible := this.Visible
-            tabCtrl.indicator.Visible := this.Visible && tabCtrl.id = this.Selected
+            tabCtrl.indicator.Visible := false
         }
     }
 }

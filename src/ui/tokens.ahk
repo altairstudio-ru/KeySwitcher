@@ -8,11 +8,13 @@ Tokens := {}
 
 ; ---- Color Tokens (Light Mode) ----
 Tokens.Light := Map(
-    "bg-canvas",       "F3F4F8",      ; Window background (Mica base)
+    "bg-canvas",       "EEF1F7",      ; Pearl background
+    "glass-edge",      "DCE3EF",
+    "toggle-on",       "248A3D",
     "bg-card",         "FFFFFFFF",    ; Glass panel fill
     "bg-card-hover",   "FFFFFFFF",    ; Hover state
     "bg-card-pressed", "FFFFFFFF",    ; Active/pressed
-    "accent",          "0067C0",      ; Primary blue
+    "accent",          "007AFF",      ; Glass navigation accent
     "accent-hover",    "0052A3",
     "accent-pressed",  "004180",
     "accent-glow",     "0067C0",      ; Focus ring color
@@ -31,10 +33,12 @@ Tokens.Light := Map(
 
 ; ---- Color Tokens (Dark Mode) ----
 Tokens.Dark := Map(
-    "bg-canvas",       "101828",
-    "bg-card",         "FF161C28",    ; Glass panel fill
-    "bg-card-hover",   "FF161C28",
-    "bg-card-pressed", "FF161C28",
+    "bg-canvas",       "171A23",
+    "glass-edge",      "414857",
+    "toggle-on",       "248A3D",
+    "bg-card",         "FF272D39",    ; Raised graphite surface
+    "bg-card-hover",   "FF343D4B",
+    "bg-card-pressed", "FF202632",
     "accent",          "3B82F6",      ; Lighter blue for dark mode
     "accent-hover",    "60A5FA",
     "accent-pressed",  "2563EB",
@@ -185,6 +189,12 @@ GetColor(tokenName, isDark := false, customAlpha := "") {
 
 ; ---- Helper: Get text color (always 6-char RRGGBB, no alpha) ----
 GetTextColor(tokenName, isDark := false) {
+    if DesignTokens.HighContrast {
+        index := InStr(tokenName,"fg-") = 1 ? (tokenName="fg-on-accent" ? 14 : 8)
+            : InStr(tokenName,"accent") ? 13 : InStr(tokenName,"edge") ? 8 : 5
+        rgb := DllCall("GetSysColor","Int",index,"UInt")
+        return Format("{:02X}{:02X}{:02X}",rgb&255,(rgb>>8)&255,(rgb>>16)&255)
+    }
     theme := isDark ? Tokens.Dark : Tokens.Light
     if !theme.Has(tokenName)
         return ""
@@ -217,6 +227,8 @@ MotionHelper(name) {
 ; ---- Export ----
 class DesignTokens {
     static IsDarkMode := false
+    static Material := "glass"
+    static HighContrast := false
 
     static Sizing => Tokens.Sizing
 
