@@ -59,11 +59,11 @@ class GlassPaint {
 
     static Color(name) => Integer("0xFF" DesignTokens.GetTextColor(name, DesignTokens.IsDarkMode))
 
-    static AttachToggle(ctrl) {
+    static AttachToggle(ctrl, compact := false) {
         this.Init()
         if !this.ToggleProc
             this.ToggleProc := CallbackCreate(ObjBindMethod(GlassPaint,"ToggleMessage"),,6)
-        this.Toggles[ctrl.Hwnd] := ctrl
+        this.Toggles[ctrl.Hwnd] := {ctrl:ctrl, compact:compact}
         DllCall("comctl32\SetWindowSubclass","Ptr",ctrl.Hwnd,"Ptr",this.ToggleProc,"UPtr",1,"UPtr",0)
     }
 
@@ -81,7 +81,7 @@ class GlassPaint {
             NumPut("UInt",1,nm,A_PtrSize=8 ? 24 : 12)
             NumPut("Ptr",hdc,nm,A_PtrSize=8 ? 32 : 16)
             DllCall("GetClientRect","Ptr",hwnd,"Ptr",nm.Ptr+(A_PtrSize=8 ? 40 : 20))
-            try this.DrawToggle(this.Toggles[hwnd],nm.Ptr)
+            try this.DrawToggle(this.Toggles[hwnd].ctrl,nm.Ptr)
             finally DllCall("EndPaint","Ptr",hwnd,"Ptr",ps)
             return 0
         }
@@ -117,25 +117,33 @@ class GlassPaint {
         scale := h/28
         tw := 44*scale, th := 24*scale, tx := x+w-tw-2, ty := y+(h-th)/2
         checked := ctrl.Value
+        compact := this.Toggles.Has(ctrl.Hwnd) && this.Toggles[ctrl.Hwnd].compact
         g := 0
         DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc, "Ptr*", &g)
         try {
             DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", g, "Int", 4)
             this.Round(g,x,y,w,h,1,this.Color("bg-canvas"))
-            this.Round(g,tx,ty,tw,th,th/2,this.Color(checked ? "toggle-on" : "glass-edge"))
-            size := th-4*scale
-            kx := checked ? tx+tw-size-2*scale : tx+2*scale
-            this.Round(g,kx,ty+2*scale,size,size,size/2,0xFFFFFFFF)
-            if DllCall("GetFocus", "Ptr") = ctrl.Hwnd
-                this.Round(g,tx-2,ty-2,tw+4,th+4,th/2+2,0,this.Color("accent"))
+            if compact {
+                this.Round(g,x+1,y+2,w-2,h-4,(h-4)/2,this.Color(checked ? "accent" : "bg-card"),this.Color("glass-edge"))
+                if DllCall("GetFocus","Ptr") = ctrl.Hwnd
+                    this.Round(g,x+3,y+4,w-6,h-8,(h-8)/2,0,this.Color(checked ? "fg-on-accent" : "accent"))
+            } else {
+                this.Round(g,tx,ty,tw,th,th/2,this.Color(checked ? "toggle-on" : "glass-edge"))
+                size := th-4*scale
+                kx := checked ? tx+tw-size-2*scale : tx+2*scale
+                this.Round(g,kx,ty+2*scale,size,size,size/2,0xFFFFFFFF)
+                if DllCall("GetFocus", "Ptr") = ctrl.Hwnd
+                    this.Round(g,tx-2,ty-2,tw+4,th+4,th/2+2,0,this.Color("accent"))
+            }
         } finally DllCall("gdiplus\GdipDeleteGraphics", "Ptr", g)
         DllCall("SetBkMode", "Ptr", hdc, "Int", 1)
-        rgb := this.Color(ctrl.Enabled ? "fg-primary" : "fg-tertiary") & 0xFFFFFF
+        rgb := this.Color(!ctrl.Enabled ? "fg-tertiary" : compact && checked ? "fg-on-accent" : "fg-primary") & 0xFFFFFF
         DllCall("SetTextColor", "Ptr", hdc, "UInt", ((rgb&255)<<16)|(rgb&0xFF00)|((rgb>>16)&255))
         old := DllCall("SelectObject", "Ptr", hdc, "Ptr", SendMessage(0x31,0,0,ctrl.Hwnd), "Ptr")
         rect := Buffer(16,0)
-        NumPut("Int",x,"Int",y,"Int",Round(tx-12*scale),"Int",y+h,rect)
-        DllCall("DrawText", "Ptr",hdc,"Str",ctrl.Text,"Int",-1,"Ptr",rect,"UInt",0x8824)
+        NumPut("Int",x,"Int",y,"Int",compact ? x+w : Round(tx-12*scale),"Int",y+h,rect)
+        label := compact && checked ? "✓ " ctrl.Text : ctrl.Text
+        DllCall("DrawText", "Ptr",hdc,"Str",label,"Int",-1,"Ptr",rect,"UInt",compact ? 0x8825 : 0x8824)
         DllCall("SelectObject","Ptr",hdc,"Ptr",old)
         return 4
     }

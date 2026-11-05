@@ -65,6 +65,12 @@ if A_Args.Length && A_Args[1] = "--smoke" {
         SendMessage(0xF5,0,0,autoToggle.Control.Hwnd)
         Assert(autoToggle.GetValue() = 0, "native toggle click updates state")
         autoToggle.SetValue(1)
+        winEditor := settingsWindow._Panels["hotkeys"].Main
+        winEditor.SetValue("#^+X")
+        Assert(UI_NormalizeHotkey(winEditor.GetValue()) = UI_NormalizeHotkey("#^+X"), "Win modifier set")
+        SendMessage(0xF5,0,0,winEditor.WinCtrl.Hwnd)
+        Assert(UI_NormalizeHotkey(winEditor.GetValue()) = UI_NormalizeHotkey("^+X"), "native Win chip click clears modifier")
+        winEditor.SetValue("^+X")
         settingsWindow._TabBar._SelectTab("main")
         Assert(settingsWindow._Panels["main"].Visible, "main tab selection")
         for ctrl in settingsWindow._Panels["hotkeys"].NativeControls

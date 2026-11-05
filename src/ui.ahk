@@ -5,7 +5,7 @@
 #Include "ui\components.ahk"
 
 APP_NAME := "AltaiR Key Switcher"
-APP_VERSION := "2.1.0"
+APP_VERSION := "2.1.1"
 
 UI_HotkeyToDisplay(hk) {
     out := ""

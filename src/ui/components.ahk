@@ -358,6 +358,8 @@ class HotkeyEditor extends ComponentBase {
         if VerCompare(A_OSVersion,"10.0.17763") >= 0
             DllCall("uxtheme\SetWindowTheme","Ptr",this.Control.Hwnd,"Str",DesignTokens.IsDarkMode ? "DarkMode_Explorer" : "Explorer","Ptr",0)
         this.WinCtrl := this.Parent.AddCheckbox("x" (x + inputW + gap) " y" y " w" winW " h" h, "Win")
+        if !DesignTokens.HighContrast
+            GlassPaint.AttachToggle(this.WinCtrl, true)
         this.DisplayCtrl := this.Control
         this.SetValue(this.Hotkey)
         this.Control.OnEvent("Change", (*) => this._OnChange())
@@ -366,6 +368,7 @@ class HotkeyEditor extends ComponentBase {
 
     _OnChange() {
         this.Hotkey := this.GetValue()
+        this.WinCtrl.Redraw()
         if this.Callback
             this.Callback.Call(this.Hotkey)
     }
@@ -382,6 +385,7 @@ class HotkeyEditor extends ComponentBase {
 
     SetValue(hk) {
         this.WinCtrl.Value := InStr(hk, "#") ? 1 : 0
+        this.WinCtrl.Redraw()
         this.Control.Value := StrReplace(hk, "#")
         this.Hotkey := this.GetValue()
     }

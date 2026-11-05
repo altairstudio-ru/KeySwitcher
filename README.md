@@ -4,7 +4,7 @@
 
 Работает автономно: программа не хранит историю и ничего не отправляет наружу.
 
-Текущая версия: **2.1.0** (номер в окне «О программе», в свойствах exe и в имени установщика синхронизированы).
+Текущая версия: **2.1.1** (номер в окне «О программе», в свойствах exe и в имени установщика синхронизированы).
 
 ---
 
@@ -167,7 +167,7 @@ SwitchLayout=0      ; 1 — вместе с текстом менять и яз�
 2. Метаданные файла (свойства Windows: версия, название, издатель):
 
    ```
-   rcedit-x64.exe layout-switcher.exe --set-file-version 2.1.0 --set-product-version 2.1.0.0 ^
+   rcedit-x64.exe layout-switcher.exe --set-file-version 2.1.1 --set-product-version 2.1.1.0 ^
      --set-version-string ProductName "AltaiR Key Switcher" --set-version-string CompanyName "Altair Studio" ^
      --set-version-string FileDescription "AltaiR Key Switcher - correction of RU/EN keyboard layout"
    ```
