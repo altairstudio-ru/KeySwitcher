@@ -417,6 +417,7 @@ class GlassWindow {
     }
 
     Destroy() {
+        HotkeyEditor.CancelForWindow(this.Hwnd)
         GlassPaint.Release(this.Gui)
         HotIfWinActive("ahk_id " this.Hwnd)
         try {

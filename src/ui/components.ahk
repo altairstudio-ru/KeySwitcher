@@ -320,6 +320,9 @@ class ToggleSwitch extends ComponentBase {
 ; ============================================================
 
 class HotkeyEditor extends ComponentBase {
+    static Active := 0
+    static ActivateHandler := 0
+
     __New(parent, label, currentHotkey, options := {}) {
         this.Parent := parent
         this.Label := label
@@ -328,6 +331,12 @@ class HotkeyEditor extends ComponentBase {
         this.Callback := GetOption(options, "OnChange", "")
         this.IsEditing := false
         this.CapturedKeys := []
+        this.Hook := 0
+        this.CaptureTimer := 0
+        this.Pending := ""
+        this.PendingVK := 0
+        this.WasSuspended := false
+        this.DefaultValue := GetOption(options, "DefaultValue", currentHotkey)
         this.Control := 0
         this.DisplayCtrl := 0
         this._CreateEditor()
@@ -338,7 +347,7 @@ class HotkeyEditor extends ComponentBase {
         x := GetOption(opts, "x", 0)
         y := GetOption(opts, "y", 0)
         w := GetOption(opts, "w", 220)
-        h := GetOption(opts, "h", 36)
+        h := GetOption(opts, "h", 40)
         name := GetOption(opts, "name", "")
         this.LabelCtrl := 0
         this.Parent.SetFont("s10 norm c" this.GetThemeTextColor("fg-primary"), "Segoe UI")
@@ -347,52 +356,182 @@ class HotkeyEditor extends ComponentBase {
             y += 28
         }
 
-        ; Native Hotkey handles Ctrl/Alt/Shift; Windows is a separate modifier.
-        winW := 58
+        ; Native buttons preserve Tab, Space/Enter and their accessible names.
+        resetW := 92
         gap := DesignTokens.Space(2)
-        inputW := Max(40, w - winW - gap)
+        inputW := Max(80, w - resetW - gap)
         hkOpts := "x" x " y" y " w" inputW " h" h
         if name
             hkOpts .= " v" name "_hk"
-        this.Control := this.Parent.AddHotkey(hkOpts, "")
-        if VerCompare(A_OSVersion,"10.0.17763") >= 0
-            DllCall("uxtheme\SetWindowTheme","Ptr",this.Control.Hwnd,"Str",DesignTokens.IsDarkMode ? "DarkMode_Explorer" : "Explorer","Ptr",0)
-        this.WinCtrl := this.Parent.AddCheckbox("x" (x + inputW + gap) " y" y " w" winW " h" h, "Win")
+        this.Control := this.Parent.AddButton(hkOpts, "")
         if !DesignTokens.HighContrast
-            GlassPaint.AttachToggle(this.WinCtrl, true)
+            GlassPaint.Attach(this.Control, "hotkey")
+        this.Reset := SecondaryButton(this.Parent,"Сбросить",{
+            x:x+inputW+gap,y:y,w:resetW,h:h,OnClick:(*) => this.ResetValue()})
         this.DisplayCtrl := this.Control
         this.SetValue(this.Hotkey)
-        this.Control.OnEvent("Change", (*) => this._OnChange())
-        this.WinCtrl.OnEvent("Click", (*) => this._OnChange())
+        this.Control.OnEvent("Click", (*) => this.BeginCapture())
+        this.Control.OnEvent("LoseFocus", (*) => this.CancelCapture())
     }
 
     _OnChange() {
-        this.Hotkey := this.GetValue()
-        this.WinCtrl.Redraw()
         if this.Callback
             this.Callback.Call(this.Hotkey)
     }
 
-    GetValue() {
-        hk := this.Control.Value
-        ; Native display names follow the current keyboard layout. Serialize
-        ; letter virtual keys as Latin A-Z so saved shortcuts stay layout-safe.
-        vk := SendMessage(0x0402, 0, 0, this.Control.Hwnd) & 0xFF
-        if vk >= 0x41 && vk <= 0x5A
-            hk := RegExReplace(hk, "[^+^!]+$", Chr(vk))
-        return hk = "" ? "" : (this.WinCtrl.Value ? "#" : "") hk
-    }
+    GetValue() => this.Hotkey
 
     SetValue(hk) {
-        this.WinCtrl.Value := InStr(hk, "#") ? 1 : 0
-        this.WinCtrl.Redraw()
-        this.Control.Value := StrReplace(hk, "#")
-        this.Hotkey := this.GetValue()
+        this.CancelCapture()
+        this.Hotkey := hk
+        this._Refresh()
+    }
+
+    static Parts(hk) {
+        parts := []
+        modifiers := RegExReplace(hk,"[^\^!+#].*$")
+        for modifier in [["^","Ctrl"],["!","Alt"],["+","Shift"],["#","Win"]] {
+            if InStr(modifiers,modifier[1])
+                parts.Push(modifier[2])
+        }
+        key := RegExReplace(hk,"^[\^!+#]*")
+        if key != "" {
+            display := GetKeyName(key)
+            parts.Push(StrLen(display)=1 ? StrUpper(display) : display)
+        }
+        return parts
+    }
+
+    _Refresh() {
+        this.Control.Text := this.IsEditing ? "Нажмите сочетание… · Esc — отмена" :
+            (this.Hotkey = "" ? "Назначить сочетание…" : UI_HotkeyToDisplay(this.Hotkey))
+        if GlassPaint.Items.Has(this.Control.Hwnd) {
+            item := GlassPaint.Items[this.Control.Hwnd]
+            item.parts := this.IsEditing ? [] : HotkeyEditor.Parts(this.Hotkey)
+            item.recording := this.IsEditing
+        }
+        this.Control.Redraw()
+    }
+
+    BeginCapture() {
+        if this.IsEditing
+            return
+        if IsObject(HotkeyEditor.Active)
+            HotkeyEditor.Active.CancelCapture()
+        if !HotkeyEditor.ActivateHandler {
+            HotkeyEditor.ActivateHandler := ObjBindMethod(HotkeyEditor,"_ActivationChanged")
+            OnMessage(0x6,HotkeyEditor.ActivateHandler)
+        }
+        this.Control.Focus()
+        this.WasSuspended := A_IsSuspended
+        this.IsEditing := true
+        this.Pending := "", this.PendingVK := 0
+        HotkeyEditor.Active := this
+        try {
+            ; Suppress application actions only while the focused field records.
+            Suspend(true)
+            this.Hook := InputHook("L0 T15")
+            this.Hook.KeyOpt("{All}","NS")
+            this.Hook.OnKeyDown := ObjBindMethod(this,"_KeyDown")
+            this.Hook.OnKeyUp := ObjBindMethod(this,"_KeyUp")
+            this.Hook.OnEnd := (*) => this.CancelCapture()
+            this.CaptureTimer := ObjBindMethod(this,"_CheckFocus")
+            SetTimer(this.CaptureTimer,100)
+            this._Refresh()
+            this.Hook.Start()
+        } catch as err {
+            this.CancelCapture()
+            throw err
+        }
+    }
+
+    _CheckFocus() {
+        if !WinActive("ahk_id " this.Parent.Hwnd) || !this.Control.Visible
+            || DllCall("GetFocus","Ptr") != this.Control.Hwnd
+            this.CancelCapture()
+    }
+
+    static _ActivationChanged(wParam,lParam,msg,hwnd) {
+        if (wParam & 0xFFFF)=0
+            this.CancelForWindow(hwnd)
+    }
+
+    static Compose(vk, sc, mods) {
+        ; Serialize letters by virtual key, independent of RU/EN input layout.
+        key := vk >= 0x41 && vk <= 0x5A ? Chr(vk) : GetKeyName(Format("vk{:X}sc{:X}",vk,sc))
+        return key = "" ? "" : mods key
+    }
+
+    _KeyDown(hook, vk, sc) {
+        this._CheckFocus()
+        if !this.IsEditing || this.PendingVK
+            return
+        if vk=0x10 || vk=0x11 || vk=0x12 || (vk>=0xA0 && vk<=0xA5) || vk=0x5B || vk=0x5C
+            return
+        mods := (GetKeyState("Ctrl","P") ? "^" : "")
+            . (GetKeyState("Alt","P") ? "!" : "")
+            . (GetKeyState("Shift","P") ? "+" : "")
+            . (GetKeyState("LWin","P") || GetKeyState("RWin","P") ? "#" : "")
+        if vk=0x1B && mods="" {
+            this.CancelCapture()
+            return
+        }
+        if vk=9 {
+            this.CancelCapture()
+            this.Reset.Control.Focus()
+            return
+        }
+        this.Pending := HotkeyEditor.Compose(vk,sc,mods)
+        this.PendingVK := vk
+    }
+
+    _KeyUp(hook,vk,sc) {
+        this._CheckFocus()
+        if this.IsEditing && this.PendingVK = vk {
+            value := this.Pending
+            this.CancelCapture()
+            if value != "" {
+                this.SetValue(value)
+                this._OnChange()
+            }
+        }
+    }
+
+    CancelCapture() {
+        if !this.IsEditing
+            return
+        this.IsEditing := false
+        if this.CaptureTimer
+            SetTimer(this.CaptureTimer,0)
+        this.CaptureTimer := 0
+        if IsObject(this.Hook) {
+            this.Hook.OnEnd := ""
+            this.Hook.OnKeyDown := ""
+            this.Hook.OnKeyUp := ""
+            this.Hook.Stop()
+        }
+        this.Hook := 0
+        this.Pending := "", this.PendingVK := 0
+        Suspend(this.WasSuspended)
+        HotkeyEditor.Active := 0
+        this._Refresh()
+    }
+
+    ResetValue() {
+        this.SetValue(this.DefaultValue)
+        this._OnChange()
+    }
+
+    static CancelForWindow(hwnd) {
+        if IsObject(this.Active) && this.Active.Parent.Hwnd = hwnd
+            this.Active.CancelCapture()
     }
 
     SetVisible(visible) {
         super.SetVisible(visible)
-        this.WinCtrl.Visible := !!visible
+        if !visible
+            this.CancelCapture()
+        this.Reset.SetVisible(visible)
         this.DisplayCtrl.Visible := !!visible
         if this.LabelCtrl
             this.LabelCtrl.Visible := !!visible

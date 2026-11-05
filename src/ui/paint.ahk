@@ -240,6 +240,8 @@ class GlassPaint {
         x := NumGet(lParam, off, "Int"), y := NumGet(lParam, off+4, "Int")
         w := NumGet(lParam, off+8, "Int")-x, h := NumGet(lParam, off+12, "Int")-y
         state := NumGet(lParam, 16, "UInt")
+        if item.kind = "hotkey"
+            return this.DrawHotkey(item,hdc,x,y,w,h,state)
         g := 0
         DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc, "Ptr*", &g)
         try {
@@ -271,6 +273,55 @@ class GlassPaint {
         DllCall("DrawText", "Ptr", hdc, "Str", item.ctrl.Text, "Int", -1, "Ptr", rect, "UInt", 0x8825)
         DllCall("SelectObject", "Ptr", hdc, "Ptr", old)
         return true
+    }
+
+    static DrawHotkey(item,hdc,x,y,w,h,state) {
+        g := 0
+        recording := item.HasOwnProp("recording") && item.recording
+        parts := item.HasOwnProp("parts") ? item.parts : []
+        scale := h/40
+        DllCall("gdiplus\GdipCreateFromHDC","Ptr",hdc,"Ptr*",&g)
+        oldFont := DllCall("SelectObject","Ptr",hdc,"Ptr",SendMessage(0x31,0,0,item.ctrl.Hwnd),"Ptr")
+        DllCall("SetBkMode","Ptr",hdc,"Int",1)
+        try {
+            DllCall("gdiplus\GdipSetSmoothingMode","Ptr",g,"Int",4)
+            brush := 0
+            DllCall("gdiplus\GdipCreateSolidFill","UInt",this.Color("bg-canvas"),"Ptr*",&brush)
+            DllCall("gdiplus\GdipFillRectangle","Ptr",g,"Ptr",brush,"Float",x-1,"Float",y-1,"Float",w+2,"Float",h+2)
+            DllCall("gdiplus\GdipDeleteBrush","Ptr",brush)
+            this.Round(g,x+1,y+1,w-2,h-2,12*scale,this.Color("bg-card"),
+                this.Color(recording || state & 0x10 ? "accent" : "glass-edge"))
+            if recording || !parts.Length {
+                this.Text(hdc,item.ctrl.Text,x+14*scale,y,w-28*scale,h,"fg-secondary")
+            } else {
+                cx := x+12*scale
+                for label in parts {
+                    size := Buffer(8,0)
+                    DllCall("GetTextExtentPoint32W","Ptr",hdc,"Str",label,"Int",StrLen(label),"Ptr",size)
+                    cw := NumGet(size,0,"Int")+20*scale
+                    if cx+cw > x+w-10*scale
+                        break
+                    this.Round(g,cx,y+6*scale,cw,h-12*scale,7*scale,
+                        this.Color("bg-canvas"),this.Color("glass-edge"))
+                    this.Text(hdc,label,cx,y,cw,h,"fg-primary",true)
+                    cx += cw+6*scale
+                }
+                if x+w-cx > 92*scale
+                    this.Text(hdc,"Изменить",x+w-90*scale,y,78*scale,h,"fg-secondary",true)
+            }
+        } finally {
+            DllCall("SelectObject","Ptr",hdc,"Ptr",oldFont)
+            DllCall("gdiplus\GdipDeleteGraphics","Ptr",g)
+        }
+        return true
+    }
+
+    static Text(hdc,text,x,y,w,h,token,center := false) {
+        rgb := this.Color(token)&0xFFFFFF
+        DllCall("SetTextColor","Ptr",hdc,"UInt",((rgb&255)<<16)|(rgb&0xFF00)|((rgb>>16)&255))
+        rect := Buffer(16,0)
+        NumPut("Int",Round(x),"Int",Round(y),"Int",Round(x+w),"Int",Round(y+h),rect)
+        DllCall("DrawTextW","Ptr",hdc,"Str",text,"Int",-1,"Ptr",rect,"UInt",center ? 0x8825 : 0x8824)
     }
 
     static Release(gui) {

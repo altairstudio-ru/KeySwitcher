@@ -5,7 +5,7 @@
 #Include "ui\components.ahk"
 
 APP_NAME := "AltaiR Key Switcher"
-APP_VERSION := "2.1.1"
+APP_VERSION := "2.2.0"
 
 UI_HotkeyToDisplay(hk) {
     out := ""
@@ -160,15 +160,15 @@ UI_CreateHotkeysTab(win, x, y, w, hk, hkCopy) {
     panel := {Controls: [], SearchText: "горячие клавиши хоткей выделение вставить скопировать буфер ctrl shift alt win"}
     SectionHeader(win, "Горячие клавиши", {x: x, y: y, w: w})
     y += 42
-    panel.Main := HotkeyEditor(win, "Исправить выделение и вставить", hk, {x: x, y: y, w: w, name: "hk_main"})
+    panel.Main := HotkeyEditor(win, "Исправить выделение и вставить", hk, {x: x, y: y, w: w, name: "hk_main",DefaultValue:"^+X"})
     panel.Controls.Push(panel.Main)
     y += 94
-    panel.Copy := HotkeyEditor(win, "Исправить выделение и только скопировать", hkCopy, {x: x, y: y, w: w, name: "hk_copy"})
+    panel.Copy := HotkeyEditor(win, "Исправить выделение и только скопировать", hkCopy, {x: x, y: y, w: w, name: "hk_copy",DefaultValue:"^!+X"})
     panel.Controls.Push(panel.Copy)
     y += 100
     win.SetFont("s11 norm", "Segoe UI")
     win.AddText("x" x " y" y " w" w " h60 c" DesignTokens.GetTextColor("fg-secondary", DesignTokens.IsDarkMode),
-        "Задайте сочетание клавиш в поле. Изменения применятся после нажатия «Сохранить».")
+        "Нажмите на сочетание и введите новое. Esc — отмена записи, Tab — переход дальше. Изменения применятся после нажатия «Сохранить».")
     return panel
 }
 
@@ -185,7 +185,7 @@ UI_CreateMainTab(win, x, y, w, autoPaste, sound, restore, ms, copyKey, switchLay
     y += 170
     panel.Duration := Slider(win, "Время показа подсказки, мс", 50, 30000, ms, {x: x, y: y, w: w - 80, name: "slider_ms"})
     y += 78
-    panel.CopyKey := HotkeyEditor(win, "Клавиша копирования выделения", StrReplace(StrReplace(copyKey, "{"), "}"), {x: x, y: y, w: w, name: "hk_copykey"})
+    panel.CopyKey := HotkeyEditor(win, "Клавиша копирования выделения", StrReplace(StrReplace(copyKey, "{"), "}"), {x: x, y: y, w: w, name: "hk_copykey",DefaultValue:"^c"})
     panel.Controls.Push(panel.Duration, panel.CopyKey)
     return panel
 }
@@ -221,6 +221,12 @@ UI_CreateAppearanceTab(win, x, y, w) {
 
 UI_SetPanelVisible(panel, visible) {
     panel.Visible := visible
+    if !visible {
+        for component in panel.Controls {
+            if component is HotkeyEditor
+                component.CancelCapture()
+        }
+    }
     for ctrl in panel.NativeControls
         ctrl.Visible := visible
 }
